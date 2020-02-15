@@ -1,0 +1,9 @@
+bluetooth.c:50:9:bluetoothCMD_ACK	24	static
+bluetooth.c:14:9:bluetoothInit	16	static
+bluetooth.c:68:9:bluetoothCMD_Until	32	static
+bluetooth.c:89:9:bluetoothCMD_Time	32	static
+bluetooth.c:182:9:bluetoothGetBondedDevices	312	static
+bluetooth.c:243:10:countOccurances	16	static
+bluetooth.c:255:10:replacechar	0	static
+bluetooth.c:275:10:splitString	16	static
+bluetooth.c:111:9:bluetoothGetScannedDevices	440	static

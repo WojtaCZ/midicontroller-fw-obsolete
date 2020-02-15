@@ -1,0 +1,2 @@
+msgDecoder.c:4:6:decodeMessage	8	static
+msgDecoder.c:25:6:internalMessageDecoder	0	static

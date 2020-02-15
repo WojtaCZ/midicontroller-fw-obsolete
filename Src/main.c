@@ -23,21 +23,21 @@
 #include "adc.h"
 #include "dma.h"
 #include "i2c.h"
-#include "usart.h"
+#include "rtc.h"
 #include "spi.h"
 #include "tim.h"
 #include "ucpd.h"
+#include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-//#include "oled.h"
-//#include "encoder.h"
-//#include <stdio.h>
-
-#include "ssd1306.h"
+#include "oled.h"
+#include "encoder.h"
+#include "bluetooth.h"
 #include <stdio.h>
-//#include "ssd1306_fonts.h"
+#include "midiController.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -105,30 +105,25 @@ int main(void)
   MX_DMA_Init();
   MX_ADC1_Init();
   MX_I2C1_Init();
-  MX_LPUART1_UART_Init();
   MX_SPI1_Init();
   MX_UCPD1_Init();
   MX_TIM2_Init();
   MX_TIM1_Init();
+  MX_RTC_Init();
+  MX_TIM3_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
 
-
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8,  GPIO_PIN_RESET);
-  HAL_Delay(100);
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8,  GPIO_PIN_SET);
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_9,  GPIO_PIN_SET);
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);
 
+  HAL_RTC_Init(&hrtc);
 
-  //oled_begin();
+  oled_begin();
 
+  HAL_TIM_Base_Start_IT(&htim1);
 
-  ssd1306_Init();
+  bluetoothInit();
 
-
-
- HAL_TIM_Base_Start_IT(&htim1);
- HAL_TIM_Base_Start_IT(&htim2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -159,10 +154,11 @@ void SystemClock_Config(void)
   HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1);
   /** Initializes the CPU, AHB and APB busses clocks 
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.HSIDiv = RCC_HSI_DIV1;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLM = RCC_PLLM_DIV1;
@@ -188,12 +184,15 @@ void SystemClock_Config(void)
   }
   /** Initializes the peripherals clocks 
   */
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_LPUART1|RCC_PERIPHCLK_I2C1
-                              |RCC_PERIPHCLK_ADC|RCC_PERIPHCLK_TIM1;
-  PeriphClkInit.Lpuart1ClockSelection = RCC_LPUART1CLKSOURCE_PCLK1;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC|RCC_PERIPHCLK_USART2
+                              |RCC_PERIPHCLK_I2C1|RCC_PERIPHCLK_ADC
+                              |RCC_PERIPHCLK_TIM1;
+  PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
   PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
   PeriphClkInit.AdcClockSelection = RCC_ADCCLKSOURCE_SYSCLK;
   PeriphClkInit.Tim1ClockSelection = RCC_TIM1CLKSOURCE_PCLK1;
+  PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSI;
+
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     Error_Handler();
@@ -205,94 +204,85 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 	if(htim->Instance == TIM2){
 		//Obnovi se oled displej
-
-
-		HAL_ADC_Start(&hadc1);
-		HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-		int vbat = HAL_ADC_GetValue(&hadc1);
-		double vbatF = (((double)vbat/(double)4096) * (double)5.1876);
-
-		HAL_ADC_Start(&hadc1);
-		HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY);
-		int vbat2 = HAL_ADC_GetValue(&hadc1);
-		double vbatF2 = (((double)vbat2/(double)4096) * (double)5.1876);
-
-
-		ssd1306_Fill(Black);
-		c = ~c;
-		ssd1306_SetCursor(2,0);
-		sprintf(buffer, "%06x   %02x", sw, c);
-		ssd1306_WriteString(buffer, Font_11x18, White);
-		ssd1306_SetCursor(2,20);
-		sprintf(buffer, "Off: %02d", cycles);
-		ssd1306_WriteString(buffer, Font_11x18, White);
-
-		ssd1306_SetCursor(2,40);
-		sprintf(buffer, "%1d.%02d|%1d.%02d", (int)vbatF, (int)((vbatF-(int)vbatF)*100), (int)vbatF2, (int)((vbatF2-(int)vbatF2)*100));
-		ssd1306_WriteString(buffer, Font_11x18, White);
-
-		ssd1306_UpdateScreen(0);
-
-		//oled_refresh();
-
-
-
-		if(sw & 0x10000){
-			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
-			cycles++;
-		}else{
-			cycles = 0;
-			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);
-		}
-		if(cycles >= 100){
-			HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
-			while(1){;}
-		}
-
+		oled_refresh();
 	}
 
 	if(htim->Instance == TIM1){
-		HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_SET);
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_SET);
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET);
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
+		midiControl_checkKeyboard();
 
-				sw = 0;
+		if(keypad.changed){
+			if(keypad.up){
+				encoderpos--;
+			}else if(keypad.down){
+				encoderpos++;
+			}
 
+			//Dopocita se pozice v dispmenu
+			if(encoderpos >= (signed int)(dispmenusize)-1){
+				encoderpos = (signed int)(dispmenusize)-1;
+			}else if(encoderpos < (signed int)0){
+				encoderpos = 0;
+			}
 
-				sw |= ((!(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_0))) | ((!(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_1))) << 1) | ((!(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_2))) << 2));
+			if(keypad.enter){
+				encoderclick = 1;
+			}
 
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_RESET);
-
-				sw |= ((!(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_0))) | ((!(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_1)) << 1)) | ((!(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_2)) << 2))) << 3;
-
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_SET);
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_RESET);
-
-				sw |= ((!(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_0))) | ((!(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_1)) << 1)) | ((!(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_2)) << 2))) << 6;
-
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_SET);
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_RESET);
-
-				sw |= ((!(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_0))) | ((!(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_1)) << 1)) | ((!(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_2)) << 2))) << 9;
-
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, GPIO_PIN_SET);
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_RESET);
-
-				sw |= ((!(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_0))) | ((!(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_1)) << 1)) | ((!(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_2)) << 2))) << 12;
-
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
+			keypad.changed = 0;
+		}
 
 
-				HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
-				sw |= ((!(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14))) | (((HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_13)) << 1))) << 15;
-				HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);
+	}
+
+	if(htim->Instance == TIM3){
+
+		//Tady se dela scrollovani
+		if(scrollPauseDone){
+			if(scrollIndex <= scrollMax){
+				scrollIndex++;
+			}else{
+				scrollPauseDone = 0;
+			}
+		}else scrollPause++;
+
+		if(scrollPause == OLED_MENU_SCROLL_PAUSE){
+			if(scrollIndex > 0){
+				scrollPauseDone = 0;
+			}else scrollPauseDone = 1;
+
+			scrollPause = 0;
+			scrollIndex = 0;
+		}
+
+		if(loadingStat < 3){
+			loadingStat++;
+		}else loadingStat = 0;
+
 	}
 
 
 }
+
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
+
+	//if(huart->Instance == USART2){
+		//Prichazi data pro BT Receive Until
+		if(btRxStatus == 2){
+			//Zapise se prichozi byte
+			btRxBuff[btRxIndex++] = btRxByte;
+			//Znovu se zapne DMA
+			HAL_UART_Receive_DMA(&huart2, (uint8_t*)&btRxByte, 1);
+		}
+
+	//}
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart){
+
+}
+
+
 /* USER CODE END 4 */
 
 /**

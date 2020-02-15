@@ -1,5 +1,8 @@
-oled.c:104:6:oled_refresh	8	static
-oled.c:109:6:oled_setDisplayedMenu	32	static
-oled.c:28:6:oled_menuOnclick	280	static
-oled.c:95:6:oled_begin	8	static
-oled.c:117:6:oled_drawMenu	32	static
+oled.c:326:6:oled_LoadingSplash	24	static
+oled.c:160:6:oled_setDisplayedMenu	32	static
+oled.c:135:6:oled_begin	8	static
+oled.c:172:6:oled_setDisplayedSplash	16	static
+oled.c:39:6:oled_menuOnclick	280	static
+oled.c:182:6:oled_drawMenu	72	static
+oled.c:150:6:oled_refresh	8	static
+oled.c:312:6:oled_StartSplash	8	static
