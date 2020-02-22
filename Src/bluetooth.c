@@ -1,5 +1,4 @@
 #include "bluetooth.h"
-
 #include <stm32g0xx_hal.h>
 #include <main.h>
 #include <stm32g0xx_hal_uart.h>
@@ -7,13 +6,31 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "midiController.h"
+
+extern uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len);
 
 //ZADOST PRIPOJENI
 //AOK{0D}{0A}CMD> %CONNECT,1,699238C2F7D5%%KEY:123456%%CONN_PARAM,0006,0000,01F4%1,699238C2F7D5,1{0D}{0A}END
 
 uint8_t bluetoothInit(){
+	btFifoIndex = 0;
+	btMsgFifoIndex = 0;
+	btCmdMode = 1;
+	btStatusMsg = 0;
+	btStreamOpen = 0;
+	btNullCounter = 0;
+	btComMessageFlag = 0;
+	btComMessageSizeFlag = 0;
+	btMessageLen = 0;
+	btMsgReceivedFlag = 0;
+	workerBtEnterPairingKey = 0;
+	workerBtBondDev = 0;
+	workerBtScanDev = 0;
 
-	if(HAL_UART_Receive_DMA(&huart2, btRxBuff, 8) != HAL_OK) return 0;
+	//Zecne se prijem
+	HAL_UART_Receive_IT(&huart2, &btFifoByte, 1);
+
 	HAL_GPIO_WritePin(BT_RST_GPIO_Port, BT_RST_Pin, GPIO_PIN_RESET);
 	HAL_GPIO_WritePin(BT_MODE_GPIO_Port, BT_MODE_Pin, GPIO_PIN_SET);
 	HAL_Delay(10);
@@ -21,16 +38,19 @@ uint8_t bluetoothInit(){
 
 	HAL_Delay(100);
 
-	while(HAL_DMA_GetState(&hdma_usart2_rx) == HAL_DMA_STATE_BUSY);
-	if(strcmp("%REBOOT%", (char *)btRxBuff) != 0) return 0;
-	HAL_UART_DMAStop(&huart2);
-
-
 	//Zapne se CMD
-	if(!bluetoothCMD_ACK("$$$", "CMD> ")) return 0;
+	if(!bluetoothEnterCMD()) return 0;
+
+	bluetoothCMD_ACK("U,Z\r", BT_AOK);
+
+	//Dev info a UART
+	if(!bluetoothCMD_ACK("GS\r", "C0")){
+		if(!bluetoothCMD_ACK("SS,C0\r", BT_AOK)) return 0;
+		if(!bluetoothCMD_ACK("R,1\r", "REBOOT")) return 0;
+	}
 
 	//Zkontroluje se název
-	if(!bluetoothCMD_ACK("GN\r", "MIDIController\r\nCMD> ")){
+	if(!bluetoothCMD_ACK("GN\r", "MIDIController")){
 		if(!bluetoothCMD_ACK("SN,MIDIController\r", BT_AOK)) return 0;
 	}
 
@@ -38,75 +58,180 @@ uint8_t bluetoothInit(){
 	if(!bluetoothCMD_ACK("SGA,0\r", BT_AOK)) return 0;
 	if(!bluetoothCMD_ACK("SGC,0\r", BT_AOK)) return 0;
 
-	//bluetoothGetScannedDevices();
+	//Apperance jako Remote
+	if(!bluetoothCMD_ACK("SDA,0180\r", BT_AOK)) return 0;
 
-	if(!bluetoothCMD_ACK("SA,0\r", BT_AOK)) return 0;
+	//Vyrobce
+	if(!bluetoothCMD_ACK("SDN,Vojtech Vosahlo\r", BT_AOK)) return 0;
+
+	//Automaticky potvrdi pin
+	if(!bluetoothCMD_ACK("SA,5\r", BT_AOK)) return 0;
+
+	//Vypne CMD
+	if(!bluetoothLeaveCMD()) return 0;
 
 
 	return 1;
 }
 
+uint8_t bluetooth_refreshSelfInfo(){
+	char buff[30];
+	memset(buff, 0, 30);
+
+	if(!bluetoothCMD_Until("GP\r", "\n", &buff)) return 0;
+
+	sprintf(oledHeader, "%s", buff);
+
+	return 1;
+}
+
+
+void bluetoothFifoFlush(){
+	memset(btFifo, 0, btFifoIndex);
+	btFifoIndex = 0;
+}
+
+void bluetoothMsgFifoFlush(){
+	memset(btMsgFifo, 0, btMsgFifoIndex);
+	btMsgFifoIndex = 0;
+}
+
+uint8_t bluetoothEnterCMD(){
+	if(!bluetoothCMD_ACK("$$$", "CMD>")) return 0;
+	btCmdMode = 1;
+	return 1;
+}
+
+uint8_t bluetoothLeaveCMD(){
+	if(!bluetoothCMD_ACK("---\r", "END")) return 0;
+	btCmdMode = 0;
+	return 1;
+}
+
+uint8_t bluetoothDecodeMsg(){
+	char * index = 0;
+	if(strstr((char *)btMsgFifo, "%BONDED") != 0){
+		btStreamOpen = 1;
+	}
+
+	if(strstr((char *)btMsgFifo, "%CONNECT") != 0){
+		index = strstr((char *)btMsgFifo, "%CONNECT");
+		sscanf((char *)index+9, "%*d,%02X%02X%02X%02X%02X%02X", &btPairReq.mac[0], &btPairReq.mac[1], &btPairReq.mac[2], &btPairReq.mac[3], &btPairReq.mac[4], &btPairReq.mac[5]);
+		sprintf(btPairReq.name, "%02X-%02X-%02X-%02X-%02X-%02X", btPairReq.mac[0], btPairReq.mac[1], btPairReq.mac[2], btPairReq.mac[3], btPairReq.mac[4], btPairReq.mac[5]);
+	}
+
+	if(strstr((char *)btMsgFifo, "%DISCONNECT") != 0){
+		oledType = OLED_MENU;
+		btStreamOpen = 0;
+	}
+
+	if(strstr((char *)btMsgFifo, "%KEY:") != 0){
+		index = strstr((char *)btMsgFifo, "%KEY:");
+		sscanf((char *)index+5, "%06ld", &btPairReq.pin);
+		oled_setDisplayedSplash(oled_BtDevPairRequestSplash, &btPairReq);
+		//sprintf(oledHeader, "%s", index+5);
+	}
+
+	if(strstr((char *)btMsgFifo, "%STREAM_OPEN") != 0){
+		btStreamOpen = 1;
+	}
+
+	if(strstr((char *)btMsgFifo, "%SECURED") != 0){
+		btStreamOpen = 1;
+	}
+
+	if(strstr((char *)btMsgFifo, "%KEY_REQ") != 0){
+		btPairReq.pin = 0;
+		oled_setDisplayedSplash(oled_BtDevKeyRequestSplash, &btPairReq);
+	}
+
+	bluetoothMsgFifoFlush();
+
+	return 1;
+}
 
 uint8_t bluetoothCMD_ACK(char *cmd, char *ack){
-		memset(btRxBuff, 0, sizeof(btRxBuff));
 
+		bluetoothFifoFlush();
 
-		if(HAL_UART_Transmit_DMA(&huart2, (uint8_t*)cmd, strlen(cmd)) != HAL_OK) return 0;
-		while(HAL_DMA_GetState(&hdma_usart2_tx) == HAL_DMA_STATE_BUSY);
-		while(HAL_UART_GetState(&huart2) == HAL_UART_STATE_BUSY_TX);
-		if(HAL_UART_Receive_DMA(&huart2, btRxBuff, strlen(ack)) != HAL_OK) return 0;
-		while(HAL_DMA_GetState(&hdma_usart2_rx) == HAL_DMA_STATE_BUSY);
-		while(HAL_UART_GetState(&huart2) == HAL_UART_STATE_BUSY_RX);
+		if(strlen(cmd) > 0){
+			if(HAL_UART_Transmit_IT(&huart2, (uint8_t*)cmd, strlen(cmd)) != HAL_OK) return 0;
+		}
 
-		HAL_UART_DMAStop(&huart2);
-		if(strstr((char *)btRxBuff, ack) == 0) return 0;
+		uint32_t now = HAL_GetTick();
+		while(strstr((char *)btFifo, ack) == 0 && HAL_GetTick() - now < BT_TIMEOUT);
+
+		bluetoothFifoFlush();
+
+		if(HAL_GetTick() - now >= BT_TIMEOUT) return 0;
 
 		return 1;
 
 }
 
-uint8_t bluetoothCMD_Until(char *cmd, char *terminator, char *recvBuffer){
+uint8_t bluetoothCMD_Until(char *cmd, char *terminator, char (*recvBuffer)[]){
 
-	memset(btRxBuff, 0, sizeof(btRxBuff));
+	bluetoothFifoFlush();
 
-	btRxStatus = 2;
-	btRxIndex = 0;
+	if(strlen(cmd) > 0){
+		if(HAL_UART_Transmit_IT(&huart2, (uint8_t*)cmd, strlen(cmd)) != HAL_OK) return 0;
+	}
 
-	if(HAL_UART_Receive_DMA(&huart2, (uint8_t*)&btRxByte, 1) != HAL_OK) return 0;
-	if(HAL_UART_Transmit_DMA(&huart2, (uint8_t*)cmd, strlen(cmd)) != HAL_OK) return 0;
-	//Ceka nez prijde terminator
-	while(!strstr((char *)btRxBuff, terminator) && btRxIndex < BT_RX_BUFF_SIZE);
+	uint32_t now = HAL_GetTick();
+	while(strstr((char *)btFifo, terminator) == 0 && HAL_GetTick() - now < BT_TIMEOUT);
 
-	if(strstr((char *)btRxBuff, terminator) == 0) return 0;
+	memcpy(recvBuffer, (char *)btFifo, btFifoIndex-1);
 
-	memcpy(recvBuffer, (char *)btRxBuff, btRxIndex);
+	bluetoothFifoFlush();
 
-	HAL_UART_DMAStop(&huart2);
+	if(HAL_GetTick() - now >= BT_TIMEOUT) return 0;
 
 	return 1;
 }
 
 uint8_t bluetoothCMD_Time(char *cmd, uint8_t s, char (*recvBuffer)[]){
-	memset(btRxBuff, 0, sizeof(btRxBuff));
 
-	btRxStatus = 2;
-	btRxIndex = 0;
-	if(HAL_UART_Receive_DMA(&huart2, (uint8_t*)&btRxByte, 1) != HAL_OK) return 0;
-	if(HAL_UART_Transmit_DMA(&huart2, (uint8_t*)cmd, strlen(cmd)) != HAL_OK) return 0;
+	bluetoothFifoFlush();
 
+	if(strlen(cmd) > 0){
+		if(HAL_UART_Transmit_IT(&huart2, (uint8_t*)cmd, strlen(cmd)) != HAL_OK) return 0;
+	}
 
-	long long int start = HAL_GetTick();
+	uint32_t now = HAL_GetTick();
+	while(HAL_GetTick() - now < (s*1000));
 
-	//Ceka dany cas
-	while(btRxIndex < BT_RX_BUFF_SIZE && HAL_GetTick() < (start+s*1000));
+	memcpy(recvBuffer, (char *)btFifo, btFifoIndex-1);
 
-	memcpy(recvBuffer, (char *)btRxBuff, btRxIndex-1);
-
-	HAL_UART_DMAStop(&huart2);
+	bluetoothFifoFlush();
 
 	return 1;
 }
 
+
+uint8_t bluetoothConnectKnown(){
+	bluetoothGetScannedDevices();
+	bluetoothGetBondedDevices();
+
+	int8_t match = -1;
+
+	for(uint8_t b = 0; b < btBondedCount; b++){
+		for(uint8_t s = 0; s < btScannedCount; s++){
+			match = b;
+			for(uint8_t i = 0; i < 6; i++){
+				if(btScanned[s].mac[i] != btBonded[b].mac[i]){
+					match = -1;
+					break;
+				}
+			}
+		}
+	}
+
+	if(match != -1){
+		return 1;
+	}
+
+	return 0;
+}
 
 uint8_t bluetoothGetScannedDevices(){
 
@@ -115,7 +240,13 @@ uint8_t bluetoothGetScannedDevices(){
 	//memset(oledHeader, 0, 30);
 	//memset(buff, 0, 100);
 
-	if(!bluetoothCMD_Time("F\r", 15, &buff)) return 0;
+	if(!bluetoothEnterCMD()) return 0;
+
+	if(!bluetoothCMD_Time("F\r", 15, &buff)){
+		if(!bluetoothLeaveCMD()) return 0;
+		return 0;
+	}
+
 
 	char *devices[20];
 	/*for(int i=0; i < 20; i++){
@@ -124,10 +255,11 @@ uint8_t bluetoothGetScannedDevices(){
 	}*/
 
 	btScannedCount = countOccurances(buff, "%")/2;
-	replacechar(buff, 300, '\r', ' ');
+	replacechar(buff, '\r', ' ');
 	splitString(buff, "\n", devices);
 
 	//sprintf(oledHeader, "Count: %d", btScannedCount);
+
 
 	uint8_t i;
 
@@ -151,7 +283,6 @@ uint8_t bluetoothGetScannedDevices(){
 
 		btScanedDevices[i].font = &Font_11x18;
 		btScanedDevices[i].name = btScanned[i].name;
-		//sprintf(btScanedDevices[i].name, "%s", btScanned[i].name);
 		btScanedDevices[i].selected = 0;
 		btScanedDevices[i].hasSpecialSelector = 0;
 		btScanedDevices[i].specharNotSelected = 0;
@@ -172,8 +303,12 @@ uint8_t bluetoothGetScannedDevices(){
 	btScanedDevices[btScannedCount].submenuLevel = 3;
 	btScanedDevices[btScannedCount].parentItem = 0;
 
-	bluetoothCMD_Until("X\r", "CMD> ", buff);
+	if(!bluetoothCMD_Until("X\r", BT_AOK, &buff)){
+		if(!bluetoothLeaveCMD()) return 0;
+		return 0;
+	}
 
+	if(!bluetoothLeaveCMD()) return 0;
 
 	return 1;
 
@@ -181,35 +316,40 @@ uint8_t bluetoothGetScannedDevices(){
 
 uint8_t bluetoothGetBondedDevices(){
 
-	sprintf(oledHeader, "1");
-
 	char buff[300];
 	memset(buff, 0, 300);
+	//CDC_Transmit_FS("A", 1);
 
-	sprintf(oledHeader, "2");
+	if(!bluetoothEnterCMD()) return 0;
 
+	if(!bluetoothCMD_Until("LB\r", "END", &buff)){
+		if(!bluetoothLeaveCMD()) return 0;
+		return 0;
+	}
 
-	if(!bluetoothCMD_Until("LB\r", "END", buff)) return 0;
+	/*CDC_Transmit_FS(buff, btRxIndex);
+	CDC_Transmit_FS("\n", 1);*/
 
-	//char *devices[20];
+	char *devices[20];
 	/*for(int i=0; i < 20; i++){
 		devices[i] = (char*)malloc(100);
 		memset(devices[i], 0, 100);
 	}*/
 
-	//btBondedCount = countOccurances(buff, "\n");
-	//replacechar(buff, 300, '\r', ' ');
-	//splitString(buff, "\n", devices);
-
+	btBondedCount = countOccurances(buff, "\n");
 	sprintf(oledHeader, "Count: %d", btBondedCount);
-	oled_refresh();
+	replacechar(buff, '\r', ' ');
+	splitString(buff, "\n", devices);
 
-	/*uint8_t i;
+
+
+	uint8_t i;
 
 	for(i = 0; i < btBondedCount; i++){
 		//Nactou se informace do seznamu zarizeni
 		sscanf((char *)devices[i], "%*d,%02X%02X%02X%02X%02X%02X,%d", &btBonded[i].mac[0], &btBonded[i].mac[1], &btBonded[i].mac[2], &btBonded[i].mac[3], &btBonded[i].mac[4], &btBonded[i].mac[5], &btBonded[i].mactype);
 		sprintf(btBonded[i].name, "%02X-%02X-%02X-%02X-%02X-%02X", btBonded[i].mac[0], btBonded[i].mac[1], btBonded[i].mac[2], btBonded[i].mac[3], btBonded[i].mac[4], btBonded[i].mac[5]);
+
 
 		btBondedDevicesMenu[i].font = &Font_11x18;
 		btBondedDevicesMenu[i].name = btBonded[i].name;
@@ -234,7 +374,8 @@ uint8_t bluetoothGetBondedDevices(){
 	btBondedDevicesMenu[btBondedCount].submenuLevel = 3;
 	btBondedDevicesMenu[btBondedCount].parentItem = 0;
 
-*/
+	if(!bluetoothLeaveCMD()) return 0;
+
 	return 1;
 
 }
@@ -252,24 +393,14 @@ uint32_t countOccurances(char * buff, char * what){
 	return count;
 }
 
-uint32_t replacechar(char *str, uint16_t size, char orig, char rep){
-
-	uint32_t n = 0;
-
-	for(uint16_t i = 0; i < size; i++){
-		if(*(str+i) == orig){
-			//*(str+i) = rep;
-			n++;
-		}
-	}
-
-	/*char *ix = str;
+uint32_t replacechar(char *str, char orig, char rep){
+    char *ix = str;
     uint32_t n = 0;
     while((ix = strchr(ix, orig)) != NULL) {
-        *(ix)++ = rep;
+        *ix++ = rep;
         n++;
-    }*/
-    //return n;
+    }
+    return n;
 }
 
 uint32_t splitString(char * string, char * delim, char ** array){

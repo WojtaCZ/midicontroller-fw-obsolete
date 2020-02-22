@@ -37,6 +37,7 @@
 #include "bluetooth.h"
 #include <stdio.h>
 #include "midiController.h"
+#include "msgDecoder.h"
 
 /* USER CODE END Includes */
 
@@ -57,6 +58,11 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+
+uint16_t midiFifoIndex;
+uint8_t midiFifo[500], uartMsgDecodeBuff[300];
+
+
 unsigned int sw = 0;
 uint8_t c, cycles = 0 ;
 char buffer[60];
@@ -124,6 +130,8 @@ int main(void)
 
   bluetoothInit();
 
+
+  oledType = OLED_MENU;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -131,6 +139,32 @@ int main(void)
   while (1)
   {
 
+	  //Pokud byl request na skenovani
+	 	  if(workerBtScanDev){
+	 		 bluetoothGetScannedDevices();
+	 		 oled_setDisplayedMenu("btScanedDevices", &btScanedDevices, sizeof(btScanedDevices)-(20-btScannedCount-1)*sizeof(btScanedDevices[19]), 0);
+	 		 workerBtScanDev = 0;
+	 	  }
+
+	 	  if(workerBtBondDev){
+	 		 bluetoothGetBondedDevices();
+	 		 oled_setDisplayedMenu("btBondedDevicesMenu", &btBondedDevicesMenu, sizeof(btBondedDevicesMenu)-(10-btBondedCount-1)*sizeof(btBondedDevicesMenu[9]), 0);
+	 		 workerBtBondDev = 0;
+	 	  }
+
+	 	  if(btMsgReceivedFlag){
+	 		  decodeMessage(uartMsgDecodeBuff, btMessageLen+6, ((uartMsgDecodeBuff[6] & 0x04) >> 2));
+	 		  btMsgReceivedFlag = 0;
+	 	  }
+
+	 	  if(workerBtEnterPairingKey){
+	 		  if(!btCmdMode) bluetoothEnterCMD();
+	 		  char pin[10];
+	 		  sprintf(pin, "%06ld\r", btPairReq.pin);
+	 		  bluetoothCMD_ACK(pin, "");
+	 		 if(btCmdMode) bluetoothLeaveCMD();
+	 		 workerBtEnterPairingKey = 0;
+	 	  }
 
     /* USER CODE END WHILE */
 
@@ -175,10 +209,10 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV2;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }
@@ -213,9 +247,37 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		if(keypad.changed){
 			if(keypad.up){
 				encoderpos--;
+				keyboardVertPosOld = keyboardVertPos;
+				keyboardVertPos++;
 			}else if(keypad.down){
 				encoderpos++;
+				keyboardVertPosOld = keyboardVertPos;
+				keyboardVertPos--;
 			}
+
+			if(keypad.right){
+				keyboardSidePos++;
+			}else if(keypad.left){
+				keyboardSidePos--;
+			}
+
+			keypadClicks.zero |= keypad.zero;
+			keypadClicks.one |= keypad.one;
+			keypadClicks.two |= keypad.two;
+			keypadClicks.three |= keypad.three;
+			keypadClicks.four |= keypad.four;
+			keypadClicks.five |= keypad.five;
+			keypadClicks.six |= keypad.six;
+			keypadClicks.seven |= keypad.seven;
+			keypadClicks.eight |= keypad.eight;
+			keypadClicks.nine |= keypad.nine;
+			keypadClicks.down |= keypad.down;
+			keypadClicks.up |= keypad.up;
+			keypadClicks.left |= keypad.left;
+			keypadClicks.right |= keypad.right;
+			keypadClicks.enter |= keypad.enter;
+			keypadClicks.mf1 |= keypad.mf1;
+			keypadClicks.power |= keypad.power;
 
 			//Dopocita se pozice v dispmenu
 			if(encoderpos >= (signed int)(dispmenusize)-1){
@@ -223,6 +285,19 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 			}else if(encoderpos < (signed int)0){
 				encoderpos = 0;
 			}
+
+			if(keyboardSidePos >= keyboardSidePosMax){
+				keyboardSidePos = keyboardSidePosMax;
+			}else if(keyboardSidePos < 0){
+				keyboardSidePos = 0;
+			}
+
+			if(keyboardVertPos >= keyboardVertPosMax){
+				keyboardVertPos = keyboardVertPosMax;
+			}else if(keyboardVertPos < 0){
+				keyboardVertPos = 0;
+			}
+
 
 			if(keypad.enter){
 				encoderclick = 1;
@@ -254,28 +329,68 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 			scrollIndex = 0;
 		}
 
-		if(loadingStat < 3){
-			loadingStat++;
-		}else loadingStat = 0;
+		if(loadingStat < 4){
+			loadingStat <<= 1;
+		}else loadingStat = 1;
+
+		loadingToggle = ~loadingToggle;
+
+		if(btStatusMsg){
+			btStatusMsgWD++;
+
+			if(btStatusMsgWD >= 2){
+				bluetoothMsgFifoFlush();
+				btStatusMsg = 0;
+				btStatusMsgWD = 0;
+			}
+		}else btStatusMsgWD = 0;
 
 	}
-
 
 }
 
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 
-	//if(huart->Instance == USART2){
-		//Prichazi data pro BT Receive Until
-		if(btRxStatus == 2){
-			//Zapise se prichozi byte
-			btRxBuff[btRxIndex++] = btRxByte;
-			//Znovu se zapne DMA
-			HAL_UART_Receive_DMA(&huart2, (uint8_t*)&btRxByte, 1);
-		}
+	if(huart->Instance == USART2){
+			//Pokud dostal status message od modulu
+			if((btFifoByte == '%' || btStatusMsg) && !btCmdMode){
+				if(btFifoByte == '%') btStatusMsg = ~btStatusMsg;
+				if(btFifoByte == '%' && !btStatusMsg) bluetoothDecodeMsg();
+				btMsgFifo[btMsgFifoIndex++] = btFifoByte;
+			}else if(!btStatusMsg){
 
-	//}
+				if(!btCmdMode && btFifoByte == 0 && btNullCounter < 4 && btComMessageSizeFlag < 2){
+					//Odpocitaji se 4 nully
+					btNullCounter++;
+				}else if(btNullCounter == 4 && btComMessageSizeFlag < 2){
+					btMsgReceivedFlag = 0;
+					//Odpocita se velikost
+					btComMessageSizeFlag++;
+					btMessageLen = 0;
+				}else if(btNullCounter == 4 && btComMessageSizeFlag == 2 && btMessageLen == 0){
+					//Zapise se index zacatku zpravy
+					btComMessageStartIndex = btFifoIndex-6;
+
+					btMessageLen = ((btFifo[btComMessageStartIndex+4] << 8) & 0xff00) | (btFifo[btComMessageStartIndex+5] & 0xff);
+
+				}
+
+				btFifo[btFifoIndex++] = btFifoByte;
+
+				if(btMessageLen > 0 && (btFifoIndex) >= btMessageLen+btComMessageStartIndex+6 && btNullCounter == 4 && btComMessageSizeFlag == 2){
+
+					memcpy(uartMsgDecodeBuff, btFifo+btComMessageStartIndex, btMessageLen+6);
+					btMsgReceivedFlag = 1;
+					bluetoothFifoFlush();
+					btNullCounter = 0;
+					btComMessageSizeFlag = 0;
+				}
+
+			}
+
+			HAL_UART_Receive_IT(&huart2, &btFifoByte, 1);
+	}
 }
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart){

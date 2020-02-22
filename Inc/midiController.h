@@ -5,6 +5,13 @@
 
 uint32_t keyboardState, keyboardStateOld;
 
+signed int keyboardSidePos, keyboardSidePosMax, keyboardVertPos, keyboardVertPosMax, keyboardVertPosOld;
+
+uint8_t alivePC, aliveRemote, alivePCCounter, aliveRemoteCounter;
+
+//Flagy pro "workery"
+uint8_t workerBtScanDev, workerBtBondDev, workerBtEnterPairingKey;
+
 uint32_t midiControl_checkKeyboard();
 
 struct keyboard{
@@ -32,6 +39,6 @@ struct keyboard{
 };
 
 
-struct keyboard keypad;
+struct keyboard keypad, keypadClicks;
 
 #endif
