@@ -1,1 +1,4 @@
-midiController.c:4:10:midiControl_checkKeyboard	24	static
+midiController.c:7:6:midiController_record	128	static
+midiController.c:28:6:midiController_play	128	static
+midiController.c:48:6:midiController_stop	8	static
+midiController.c:66:10:midiControl_checkKeyboard	24	static

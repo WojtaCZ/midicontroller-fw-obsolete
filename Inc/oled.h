@@ -50,6 +50,8 @@ void oled_BtDevPairRequestSplash(struct btDevice * dev);
 void oled_BtDevKeyRequestSplash(struct btDevice * dev);
 void oled_BtDevKeyEnterSplash(struct btDevice * dev);
 void oled_setDisplayedSplash(void (*funct)(), void * params);
+void oled_playingSplash(char * songname);
+void oled_recordingSplash(char * songname);
 void oled_refreshPause();
 void oled_refreshresume();
 

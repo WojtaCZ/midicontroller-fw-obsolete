@@ -13,6 +13,9 @@ uint8_t alivePC, aliveRemote, alivePCCounter, aliveRemoteCounter;
 uint8_t workerBtScanDev, workerBtBondDev, workerBtEnterPairingKey;
 
 uint32_t midiControl_checkKeyboard();
+void midiController_record(uint8_t initiator, char * songname);
+void midiController_play(uint8_t initiator, char * songname);
+void midiController_stop(uint8_t initiator);
 
 struct keyboard{
 	uint8_t one;

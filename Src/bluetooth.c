@@ -41,8 +41,6 @@ uint8_t bluetoothInit(){
 	//Zapne se CMD
 	if(!bluetoothEnterCMD()) return 0;
 
-	bluetoothCMD_ACK("U,Z\r", BT_AOK);
-
 	//Dev info a UART
 	if(!bluetoothCMD_ACK("GS\r", "C0")){
 		if(!bluetoothCMD_ACK("SS,C0\r", BT_AOK)) return 0;

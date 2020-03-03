@@ -7,19 +7,16 @@
 #include "bluetooth.h"
 #include "midiController.h"
 #include <math.h>
+#include "msgDecoder.h"
 
 struct menuitem mainmenu[] = {
 		{"Prehraj", 0, &Font_11x18, 0, 0, 0, 0, 0/*, 0, 0*/},
 		{"Nahraj", 0, &Font_11x18, 0, 0, 0, 0, 0/*, 0, 0*/},
-		{"Varhany", 0, &Font_11x18, 0, 0, 0, 0, 0/*, 0, 0*/},
-		{"Ovladace", 0, &Font_11x18, 0, 0, 0, 0, 0/*, 0, 0*/},
 		{"Nastaveni", 0, &Font_11x18, 0, 0, 0, 0, 0/*, &settingsmenu, "settingsmenu"*/}
 };
 
 struct menuitem settingsmenu[] = {
-		{"Bluetooth", 0, &Font_11x18, 0, 0, 0, 1, &mainmenu[3].name/*, 0, 0*/},
-		{"USB", 0, &Font_11x18, 0, 0, 0, 1, &mainmenu[3].name/*, 0, 0*/},
-		{"MIDI", 0, &Font_11x18, 0, 0, 0, 1, &mainmenu[3].name/*, 0, 0*/},
+		{"Bluetooth", 0, &Font_11x18, 0, 0, 0, 1, &mainmenu[2].name/*, 0, 0*/},
 		{"Zpet", 0, &Font_11x18, 1, 36, 37, 1, 0/*, 0, 0*/}
 };
 
@@ -27,12 +24,6 @@ struct menuitem bluetoothmenu[] = {
 		{"Skenovat", 0, &Font_11x18, 0, 0, 0, 2, &settingsmenu[0].name/*, 0, 0*/},
 		{"Sparovat", 0, &Font_11x18, 0, 0, 0, 2, &settingsmenu[0].name/*, 0, 0*/},
 		{"Informace", 0, &Font_11x18, 0, 0, 0, 2, &settingsmenu[0].name/*, 0, 0*/},
-		{"Zpet", 0, &Font_11x18, 1, 36, 37, 2, 0/*, 0, 0*/}
-};
-
-struct menuitem organmenu[] = {
-		{"Zapnout", 0, &Font_11x18, 0, 0, 0, 2, &mainmenu[2].name/*, 0, 0*/},
-		{"Vypnout", 0, &Font_11x18, 0, 0, 0, 2, &mainmenu[2].name/*, 0, 0*/},
 		{"Zpet", 0, &Font_11x18, 1, 36, 37, 2, 0/*, 0, 0*/}
 };
 
@@ -48,22 +39,13 @@ void oled_menuOnclick(int menupos){
 
 		switch(menupos){
 			case 0:
-
+				midiController_play(ADDRESS_CONTROLLER, "Ahojky Lidicky");
 			break;
 
 			case 1:
 			break;
 
 			case 2:
-				oled_setDisplayedMenu("organmenu",&organmenu, sizeof(organmenu), 1);
-			break;
-
-			case 3:
-				workerBtBondDev = 1;
-
-			break;
-
-			case 4:
 				oled_setDisplayedMenu("settingsmenu",&settingsmenu, sizeof(settingsmenu), 1);
 			break;
 
@@ -78,12 +60,6 @@ void oled_menuOnclick(int menupos){
 			break;
 
 			case 1:
-			break;
-
-			case 2:
-			break;
-
-			case 3:
 				oled_setDisplayedMenu("mainmenu",&mainmenu, sizeof(mainmenu), 0);
 			break;
 
@@ -122,25 +98,7 @@ void oled_menuOnclick(int menupos){
 		if(menupos == btBondedCount){
 			oled_setDisplayedMenu("mainmenu",&mainmenu, sizeof(mainmenu), 0);
 		}
-	}else if(strcmp(dispmenuname, "organmenu") == 0){
-		switch(menupos){
-					case 0:
-						//midiControl_current_On();
-					break;
-
-					case 1:
-						//midiControl_current_Off();
-					break;
-
-					case 2:
-						oled_setDisplayedMenu("mainmenu",&mainmenu, sizeof(mainmenu), 0);
-					break;
-
-					default:
-					break;
-				}
 	}
-
 	encoderclick = 0;
 
 	if(strcmp(dispmenuname, menunameold) != 0) encoderpos = 0;
@@ -208,10 +166,10 @@ void oled_drawMenu(){
 		}*/
 	}
 
-	RTC_TimeTypeDef time;
+	/*RTC_TimeTypeDef time;
 	RTC_DateTypeDef date;
 	HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN);
-	HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN);
+	HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN);*/
 
 	//sprintf(oledHeader, "%d.%d %d:%d",date.Date, date.Month, time.Hours, time.Minutes);
 	//sprintf(oledHeader, "E: %d N: %s", encoderpos, dispmenu[encoderpos].name);
@@ -549,7 +507,7 @@ void oled_BtDevKeyEnterSplash(struct btDevice * dev){
 	}
 
 
-	uint8_t digit = (dev->pin / (long int)pow(10, keyboardSidePosMax-keyboardSidePos)) - (dev->pin/(long int)pow(10, keyboardSidePosMax-keyboardSidePos+1))*10;;
+	uint8_t digit = (dev->pin / (long int)pow(10, keyboardSidePosMax-keyboardSidePos)) - (dev->pin/(long int)pow(10, keyboardSidePosMax-keyboardSidePos+1))*10;
 
 	if(keypadClicks.down){
 		//keyboardVertPos = digit;
@@ -617,6 +575,80 @@ void oled_BtDevPairCompleteSplash(){
 	ssd1306_SetCursor((128-(strlen(msg)-1)*11)/2, 25);
 	ssd1306_WriteString(msg, Font_11x18, White);
 
+
+
+	if(encoderclick){
+		oledType = OLED_MENU;
+		encoderclick = 0;
+	}
+}
+
+void oled_playingSplash(char * songname){
+
+	char msg[25];
+
+	sprintf(msg, "Prehravam");
+	ssd1306_SetCursor((128-(strlen(msg)-1)*11)/2, 1);
+	ssd1306_WriteString(msg, Font_11x18, White);
+
+	if(strlen(songname) > 9){
+			scrollMax = (strlen(songname) - 10);
+			ssd1306_SetCursor(14, 25);
+			char tmp[10];
+			memcpy(tmp, (char*)(songname)+scrollIndex, 9);
+			memset(tmp+9, 0, strlen(songname)-9);
+			ssd1306_WriteString(tmp, Font_11x18, White);
+		}else{
+			ssd1306_SetCursor((128-(strlen(songname)-1)*9)/2, 25);
+			ssd1306_WriteString(songname, Font_11x18, White);
+		}
+
+	for(int x = 0; x < 128; x++){
+		for(int y = 0; y < 12; y++){
+			ssd1306_DrawPixel(x, y+51, White);
+		}
+	}
+
+	sprintf(msg, "Zastavit");
+	ssd1306_SetCursor((128-(strlen(msg)-1)*7)/2, 53);
+	ssd1306_WriteString(msg, Font_7x10, Black);
+
+	if(encoderclick){
+		oledType = OLED_MENU;
+		encoderclick = 0;
+	}
+}
+
+
+void oled_recordingSplash(char * songname){
+
+	char msg[25];
+
+	sprintf(msg, "Nahravam");
+	ssd1306_SetCursor((128-(strlen(msg)-1)*11)/2, 1);
+	ssd1306_WriteString(msg, Font_11x18, White);
+
+	if(strlen(songname) > 9){
+			scrollMax = (strlen(songname) - 10);
+			ssd1306_SetCursor(14, 25);
+			char tmp[10];
+			memcpy(tmp, (char*)(songname)+scrollIndex, 9);
+			memset(tmp+9, 0, strlen(songname)-9);
+			ssd1306_WriteString(tmp, Font_11x18, White);
+		}else{
+			ssd1306_SetCursor((128-(strlen(songname)-1)*9)/2, 25);
+			ssd1306_WriteString(songname, Font_11x18, White);
+		}
+
+	for(int x = 0; x < 128; x++){
+		for(int y = 0; y < 12; y++){
+			ssd1306_DrawPixel(x, y+51, White);
+		}
+	}
+
+	sprintf(msg, "Zastavit");
+	ssd1306_SetCursor((128-(strlen(msg)-1)*7)/2, 53);
+	ssd1306_WriteString(msg, Font_7x10, Black);
 
 
 	if(encoderclick){

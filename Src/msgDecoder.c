@@ -41,12 +41,14 @@ void decodeMessage(char * msg, uint16_t len, uint8_t broadcast){
 				/*if(midiPlay(msg+9)){
 					msgAOK(0, msgType, len, 0, NULL);
 				}else msgERR(0, msgType, len);*/
+				midiController_play(src, &msg[9]);
 			}else if(msg[8] == INTERNAL_COM_STOP){
 				/*if(midiStop()){
 					msgAOK(0, msgType, len, 0, NULL);
 				}else msgERR(0, msgType, len);*/
+				midiController_stop(src);
 			}else if(msg[8] == INTERNAL_COM_REC){
-				//midiControl_record(src);
+				midiController_record(src, &msg[9]);
 				msgAOK(0, msgType, len, 0, NULL);
 			}else if(msg[8] == INTERNAL_COM_KEEPALIVE){
 				if(src == ADDRESS_CONTROLLER){

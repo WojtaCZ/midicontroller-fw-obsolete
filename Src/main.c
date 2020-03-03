@@ -66,6 +66,8 @@ uint8_t midiFifo[500], uartMsgDecodeBuff[300];
 unsigned int sw = 0;
 uint8_t c, cycles = 0 ;
 char buffer[60];
+
+int x = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -118,6 +120,7 @@ int main(void)
   MX_RTC_Init();
   MX_TIM3_Init();
   MX_USART2_UART_Init();
+  MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
 
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);
@@ -299,8 +302,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 			}
 
 
-			if(keypad.enter){
+			if(keypad.enter > 0){
 				encoderclick = 1;
+				keypad.enter = 0;
 			}
 
 			keypad.changed = 0;
@@ -347,8 +351,32 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 	}
 
+	if(htim->Instance == TIM6){
+		HAL_TIM_Base_Stop_IT(&htim6);
+		HAL_NVIC_DisableIRQ(TIM6_DAC_LPTIM1_IRQn);
+
+	    keypad.enter = !(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14));
+		keypad.changed = 1;
+		x++;
+
+		sprintf(oledHeader, "%d %d", x,  keypad.enter);
+
+		HAL_NVIC_ClearPendingIRQ(EXTI4_15_IRQn);
+		HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
+		HAL_NVIC_ClearPendingIRQ(EXTI4_15_IRQn);
+		HAL_NVIC_EnableIRQ(TIM6_DAC_LPTIM1_IRQn);
+	}
+
 }
 
+void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
+{
+	if(GPIO_Pin == GPIO_PIN_14 && HAL_TIM_Base_GetState(&htim6) != HAL_TIM_STATE_BUSY){
+		HAL_NVIC_EnableIRQ(TIM6_DAC_LPTIM1_IRQn);
+		HAL_TIM_Base_Start_IT(&htim6);
+		HAL_NVIC_DisableIRQ(EXTI4_15_IRQn);
+	}
+}
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 

@@ -1,5 +1,67 @@
 #include "midiController.h"
 #include <stm32g0xx_hal.h>
+#include "msgDecoder.h"
+#include "oled.h"
+
+
+void midiController_record(uint8_t initiator, char * songname){
+	//Spusteno z PC
+	if(initiator == ADDRESS_PC){
+		oled_setDisplayedSplash(oled_recordingSplash, songname);
+	}else if(initiator == ADDRESS_MAIN){
+		//Spusteno z hl jednotky
+		oled_setDisplayedSplash(oled_recordingSplash, songname);
+	}else if(initiator == ADDRESS_CONTROLLER){
+	//Spusteno z ovladace
+		//Odesle se info o pisnicce
+		char msg[100];
+		msg[0] = INTERNAL_COM;
+		msg[1] = INTERNAL_COM_REC;
+		memcpy(&msg[2], songname, strlen(songname));
+		sendMsg(ADDRESS_CONTROLLER, ADDRESS_OTHER, 1, INTERNAL, msg, strlen(songname)+2);
+		oled_setDisplayedSplash(oled_recordingSplash, songname);
+	}
+
+
+}
+
+void midiController_play(uint8_t initiator, char * songname){
+	//Spusteno z PC
+	if(initiator == ADDRESS_PC){
+		oled_setDisplayedSplash(oled_playingSplash, songname);
+	}else if(initiator == ADDRESS_MAIN){
+		//Spusteno z hl jednotky
+		oled_setDisplayedSplash(oled_playingSplash, songname);
+	}else if(initiator == ADDRESS_CONTROLLER){
+	//Spusteno z ovladace
+		char msg[100];
+		msg[0] = INTERNAL_COM;
+		msg[1] = INTERNAL_COM_PLAY;
+		memcpy(&msg[2], songname, strlen(songname));
+		sendMsg(ADDRESS_CONTROLLER, ADDRESS_OTHER, 1, INTERNAL, msg, strlen(songname)+2);
+		oled_setDisplayedSplash(oled_playingSplash, songname);
+	}
+
+
+}
+
+void midiController_stop(uint8_t initiator){
+	oledType = OLED_MENU;
+	oled_refreshResume();
+	/*//Spusteno z PC
+	if(initiator == 0x00){
+
+		//sendMessage();
+	}else if(initiator == 0x01){
+	//Spusteno ovladacem
+
+	}else if(initiator == 0x02){
+	//Spusteno ze zakladnove stanice
+
+	}
+*/
+
+}
 
 uint32_t midiControl_checkKeyboard(){
 
@@ -10,7 +72,6 @@ uint32_t midiControl_checkKeyboard(){
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
 
 	keyboardState = 0;
-
 
 	keyboardState |= ((!(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_0))) | ((!(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_1))) << 1) | ((!(HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_2))) << 2));
 
@@ -37,7 +98,7 @@ uint32_t midiControl_checkKeyboard(){
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
 
-	keyboardState |= ((!(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14))) | (((HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_13)) << 1))) << 15;
+	keyboardState |= (/*(!(HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_14))) | */(((HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_13)) << 1))) << 15;
 
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);
 
@@ -62,7 +123,7 @@ uint32_t midiControl_checkKeyboard(){
 		keypad.down = ((keyboardState >> 12) & 0x4) >> 2;
 		keypad.left = ((keyboardState >> 12) & 0x2) >> 1;
 		keypad.right = ((keyboardState >> 12) & 0x1);
-		keypad.enter = ((keyboardState >> 12) & 0x8) >> 3;
+		//keypad.enter |= (((keyboardState >> 12) & 0x8) >> 3) & 0x01;
 
 		keypad.changed = 1;
 
