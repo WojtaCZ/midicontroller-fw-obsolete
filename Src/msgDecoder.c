@@ -30,6 +30,7 @@ extern uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len);
 */
 
 void decodeMessage(char * msg, uint16_t len, uint8_t broadcast){
+
 	//Internal
 	char msgType = msg[6];
 
@@ -38,14 +39,8 @@ void decodeMessage(char * msg, uint16_t len, uint8_t broadcast){
 	if((msgType & 0xE0) == 0x20){
 		if(msg[7] == INTERNAL_COM){
 			if(msg[8] == INTERNAL_COM_PLAY){
-				/*if(midiPlay(msg+9)){
-					msgAOK(0, msgType, len, 0, NULL);
-				}else msgERR(0, msgType, len);*/
 				midiController_play(src, &msg[9]);
 			}else if(msg[8] == INTERNAL_COM_STOP){
-				/*if(midiStop()){
-					msgAOK(0, msgType, len, 0, NULL);
-				}else msgERR(0, msgType, len);*/
 				midiController_stop(src);
 			}else if(msg[8] == INTERNAL_COM_REC){
 				midiController_record(src, &msg[9]);
@@ -115,6 +110,8 @@ void sendMsg(uint8_t src, uint8_t dest, uint8_t broadcast, uint8_t type, char * 
 		//CDC_Transmit_FS(buffer, len+6);
 		HAL_UART_Transmit_IT(&huart2, buffer, len+6);
 	}else if(dest == ADDRESS_MAIN){
+		HAL_UART_Transmit_IT(&huart2, buffer, len+6);
+	}else if(dest == ADDRESS_OTHER){
 		HAL_UART_Transmit_IT(&huart2, buffer, len+6);
 	}
 

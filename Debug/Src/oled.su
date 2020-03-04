@@ -15,4 +15,4 @@ oled.c:378:6:oled_BtDevPairRequestSplash	48	static
 oled.c:413:6:oled_BtDevKeyRequestSplash	56	static
 oled.c:567:6:oled_BtDevPairCompleteSplash	48	static
 oled.c:586:6:oled_playingSplash	56	static
-oled.c:623:6:oled_recordingSplash	56	static
+oled.c:624:6:oled_recordingSplash	56	static

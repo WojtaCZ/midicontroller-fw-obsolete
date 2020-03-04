@@ -39,7 +39,7 @@ void oled_menuOnclick(int menupos){
 
 		switch(menupos){
 			case 0:
-				midiController_play(ADDRESS_CONTROLLER, "Ahojky Lidicky");
+				midiController_play(ADDRESS_CONTROLLER, "bumble_bee");
 			break;
 
 			case 1:
@@ -616,6 +616,7 @@ void oled_playingSplash(char * songname){
 	if(encoderclick){
 		oledType = OLED_MENU;
 		encoderclick = 0;
+		midiController_stop(ADDRESS_CONTROLLER);
 	}
 }
 
@@ -654,5 +655,6 @@ void oled_recordingSplash(char * songname){
 	if(encoderclick){
 		oledType = OLED_MENU;
 		encoderclick = 0;
+		midiController_stop(ADDRESS_CONTROLLER);
 	}
 }

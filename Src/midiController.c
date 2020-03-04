@@ -46,20 +46,14 @@ void midiController_play(uint8_t initiator, char * songname){
 }
 
 void midiController_stop(uint8_t initiator){
-	oledType = OLED_MENU;
-	oled_refreshResume();
-	/*//Spusteno z PC
-	if(initiator == 0x00){
-
-		//sendMessage();
-	}else if(initiator == 0x01){
-	//Spusteno ovladacem
-
-	}else if(initiator == 0x02){
-	//Spusteno ze zakladnove stanice
-
-	}
-*/
+	if(initiator == ADDRESS_CONTROLLER){
+			char msg[5];
+			msg[0] = INTERNAL_COM;
+			msg[1] = INTERNAL_COM_STOP;
+			sendMsg(ADDRESS_CONTROLLER, ADDRESS_OTHER, 1, INTERNAL, msg,3);
+		}else{
+			oledType = OLED_MENU;
+		}
 
 }
 
