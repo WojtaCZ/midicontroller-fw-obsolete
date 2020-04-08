@@ -24,9 +24,9 @@ uint8_t bluetoothInit(){
 	btComMessageSizeFlag = 0;
 	btMessageLen = 0;
 	btMsgReceivedFlag = 0;
-	workerBtEnterPairingKey = 0;
-	workerBtBondDev = 0;
-	workerBtScanDev = 0;
+	workerDesert(&workerBtEnterPairingKey);
+	workerDesert(&workerBtBondDev);
+	workerDesert(&workerBtScanDev);
 
 	//Zecne se prijem
 	HAL_UART_Receive_IT(&huart2, &btFifoByte, 1);
@@ -72,39 +72,6 @@ uint8_t bluetoothInit(){
 	return 1;
 }
 
-uint8_t bluetooth_refreshSelfInfo(){
-	char buff[30];
-	memset(buff, 0, 30);
-
-	if(!bluetoothCMD_Until("GP\r", "\n", &buff)) return 0;
-
-	sprintf(oledHeader, "%s", buff);
-
-	return 1;
-}
-
-
-void bluetoothFifoFlush(){
-	memset(btFifo, 0, btFifoIndex);
-	btFifoIndex = 0;
-}
-
-void bluetoothMsgFifoFlush(){
-	memset(btMsgFifo, 0, btMsgFifoIndex);
-	btMsgFifoIndex = 0;
-}
-
-uint8_t bluetoothEnterCMD(){
-	if(!bluetoothCMD_ACK("$$$", "CMD>")) return 0;
-	btCmdMode = 1;
-	return 1;
-}
-
-uint8_t bluetoothLeaveCMD(){
-	if(!bluetoothCMD_ACK("---\r", "END")) return 0;
-	btCmdMode = 0;
-	return 1;
-}
 
 uint8_t bluetoothDecodeMsg(){
 	char * index = 0;
@@ -147,238 +114,447 @@ uint8_t bluetoothDecodeMsg(){
 
 	return 1;
 }
+uint8_t bluetooth_refreshSelfInfo(){
 
-uint8_t bluetoothCMD_ACK(char *cmd, char *ack){
+	//Neimplementovane
 
-		bluetoothFifoFlush();
-
-		if(strlen(cmd) > 0){
-			if(HAL_UART_Transmit_IT(&huart2, (uint8_t*)cmd, strlen(cmd)) != HAL_OK) return 0;
-		}
-
-		uint32_t now = HAL_GetTick();
-		while(strstr((char *)btFifo, ack) == 0 && HAL_GetTick() - now < BT_TIMEOUT);
-
-		bluetoothFifoFlush();
-
-		if(HAL_GetTick() - now >= BT_TIMEOUT) return 0;
-
-		return 1;
-
+	return 1;
 }
 
-uint8_t bluetoothCMD_Until(char *cmd, char *terminator, char (*recvBuffer)[]){
 
+//Vymazani bt bufferu
+void bluetoothFifoFlush(){
+	memset(btFifo, 0, btFifoIndex);
+	btFifoIndex = 0;
+}
+
+//Vymazani bufferu pro bt zpravy
+void bluetoothMsgFifoFlush(){
+	memset(btMsgFifo, 0, btMsgFifoIndex);
+	btMsgFifoIndex = 0;
+}
+
+//Zapnuti CMD modu modulu
+uint8_t bluetoothEnterCMD(){
+	if(!bluetoothCMD_ACK("$$$", "CMD>")) return 0;
+	btCmdMode = 1;
+	return 1;
+}
+
+//Vypnuti CMD modu modulu
+uint8_t bluetoothLeaveCMD(){
+	if(!bluetoothCMD_ACK("---\r", BT_END)) return 0;
+	btCmdMode = 0;
+	return 1;
+}
+
+
+
+//Rutina pro odeslani prikazu a kontrolu odpovedi v podobe stringu ale bez zaznamenani odpovedi
+uint8_t bluetoothCMD_ACK(char *cmd, char *ack){
+
+	//Vycisti se buffer
 	bluetoothFifoFlush();
 
+	//Odesle se prikaz
 	if(strlen(cmd) > 0){
 		if(HAL_UART_Transmit_IT(&huart2, (uint8_t*)cmd, strlen(cmd)) != HAL_OK) return 0;
 	}
 
+	//Ceka se nez se vrati vyzadana odpoved nebo nez nastane timeout
+	uint32_t now = HAL_GetTick();
+	while(strstr((char *)btFifo, ack) == 0 && HAL_GetTick() - now < BT_TIMEOUT);
+
+	//Odpoved se zkopiruje
+	memcpy(btMsgFifo, btFifo, btFifoIndex);
+	btMsgFifoIndex = btFifoIndex;
+	//Radeji se dekoduje, pokud do ni prisel napriklad jeste nejaky prikaz
+	bluetoothDecodeMsg();
+	//Vycisti se buffer
+	bluetoothFifoFlush();
+
+	//Pokud byl timeout, vrati 0
+	if(HAL_GetTick() - now >= BT_TIMEOUT) return 0;
+
+	return 1;
+
+}
+
+//Rutina pro odeslani prikazu a zastaveni na terminatoru, vrati zpet i text odpovedi
+uint8_t bluetoothCMD_Until(char *cmd, char *terminator, char (*recvBuffer)[]){
+
+	//Vycisti se buffer
+	bluetoothFifoFlush();
+
+	//Odesle se prikaz
+	if(strlen(cmd) > 0){
+		if(HAL_UART_Transmit_IT(&huart2, (uint8_t*)cmd, strlen(cmd)) != HAL_OK) return 0;
+	}
+
+	//Ceka se nez se vrati terminator nebo nez nastane timeout
 	uint32_t now = HAL_GetTick();
 	while(strstr((char *)btFifo, terminator) == 0 && HAL_GetTick() - now < BT_TIMEOUT);
 
+	//Odpoved se okopiruje do bufferu na vraceni
 	memcpy(recvBuffer, (char *)btFifo, btFifoIndex-1);
 
+	//Vycisti se buffer
 	bluetoothFifoFlush();
 
+	//Pokud byl timeout, vrati 0
 	if(HAL_GetTick() - now >= BT_TIMEOUT) return 0;
 
 	return 1;
 }
 
+//Rutina pro odeslani prikazu a zaznamenavani odpovedi po nejaky cas
 uint8_t bluetoothCMD_Time(char *cmd, uint8_t s, char (*recvBuffer)[]){
 
+	//Vycisti se buffer
 	bluetoothFifoFlush();
 
+	//Odesle se prikaz
 	if(strlen(cmd) > 0){
 		if(HAL_UART_Transmit_IT(&huart2, (uint8_t*)cmd, strlen(cmd)) != HAL_OK) return 0;
 	}
 
+	//Pocka se zadany cas
 	uint32_t now = HAL_GetTick();
+
 	while(HAL_GetTick() - now < (s*1000));
 
+	//Odpoved se okopiruje do bufferu na vraceni
 	memcpy(recvBuffer, (char *)btFifo, btFifoIndex-1);
 
+	//Vycisti se buffer
 	bluetoothFifoFlush();
 
 	return 1;
 }
 
-
+//Rutina pro pripojeni sparovanych zarizeni
 uint8_t bluetoothConnectKnown(){
+	//Oskenuji se zarizeni v okoli
 	bluetoothGetScannedDevices();
+	//Ziska se seznam sparovanych zarizeni
 	bluetoothGetBondedDevices();
 
-	int8_t match = -1;
+	int8_t match = 0;
+	int8_t selected = -1;
 
+	//Najde se shoda v parovanych a skenovanych
 	for(uint8_t b = 0; b < btBondedCount; b++){
 		for(uint8_t s = 0; s < btScannedCount; s++){
-			match = b;
+			match = 0;
 			for(uint8_t i = 0; i < 6; i++){
-				if(btScanned[s].mac[i] != btBonded[b].mac[i]){
-					match = -1;
+				if(btScanned[s].mac[i] == btBonded[b].mac[i]){
+					match++;
+				}
+
+				if(match == 6){
+					selected = b;
 					break;
 				}
 			}
 		}
 	}
 
-	if(match != -1){
-		return 1;
-	}
+	//Pokud je shoda
+	if(selected != -1){
+		//Okopiruje se MAC adresa
+		char * mac = (char*) malloc(20);
+		sprintf(mac, "%02X%02X%02X%02X%02X%02X", btBonded[match].mac[0], btBonded[match].mac[1], btBonded[match].mac[2], btBonded[match].mac[3], btBonded[match].mac[4], btBonded[match].mac[5]);
+		sprintf(oledHeader, "%s" ,mac);
+		//Pokusi se pripojit k MAC
+		if(!bluetoothConnect(mac)) return 0;
+	}else return 0;
 
-	return 0;
+	//Odejde z CMD modu
+	bluetoothLeaveCMD();
+
+	return 1;
 }
 
+
+//Rutina pro oskenovani zarizeni v okoli a vytvoreni menu
 uint8_t bluetoothGetScannedDevices(){
 
 	char buff[300];
 	memset(buff, 0, 300);
-	//memset(oledHeader, 0, 30);
-	//memset(buff, 0, 100);
 
+	//Vstoupi do CMD modu
 	if(!bluetoothEnterCMD()) return 0;
 
-	if(!bluetoothCMD_Time("F\r", 15, &buff)){
+	//Skenuje 15s
+	if(!bluetoothCMD_Time("F\r", 30, &buff)){
 		if(!bluetoothLeaveCMD()) return 0;
 		return 0;
 	}
 
-
 	char *devices[20];
-	/*for(int i=0; i < 20; i++){
-		devices[i] = (char*)malloc(100);
-		memset(devices[i], 0, 100);
-	}*/
 
+	//Spocita pocet zarizeni a rozdeli vracene stringy na jednotliva zarizeni
 	btScannedCount = countOccurances(buff, "%")/2;
 	replacechar(buff, '\r', ' ');
 	splitString(buff, "\n", devices);
 
-	//sprintf(oledHeader, "Count: %d", btScannedCount);
+	//Pokud nasel zarizeni v okoli
+	if(btScannedCount != 0){
+		uint8_t i;
 
+		//Projde seznam a z ruznych typu odpovedi vycucne data
+		for(i = 0; i < btScannedCount; i++){
+			//Nactou se informace do seznamu zarizeni
+			if(strstr((char *)devices[i+1], ",,") - (char *)devices[i+1] < 16 && strstr((char *)devices[i+1], ",,")){
+				//Pokud prijde response kde neni jmeno
+				sscanf((char *)devices[i+1], "%*[%]%02X%02X%02X%02X%02X%02X,%d,,%[^,],%02X", &btScanned[i].mac[0], &btScanned[i].mac[1], &btScanned[i].mac[2], &btScanned[i].mac[3], &btScanned[i].mac[4], &btScanned[i].mac[5], &btScanned[i].mactype, btScanned[i].uuid, &btScanned[i].rssi);
+				sprintf(btScanned[i].name, "%02X-%02X-%02X-%02X-%02X-%02X", btScanned[i].mac[0], btScanned[i].mac[1], btScanned[i].mac[2], btScanned[i].mac[3], btScanned[i].mac[4], btScanned[i].mac[5]);
+			}else if(strstr((char *)devices[i+1], ",,") - (char *)devices[i+1] >= 16){
+				//Pokud prijde response bez uuid
+				sscanf((char *)devices[i+1], "%*[%]%02X%02X%02X%02X%02X%02X,%d,%[^,],,%02X", &btScanned[i].mac[0], &btScanned[i].mac[1], &btScanned[i].mac[2], &btScanned[i].mac[3], &btScanned[i].mac[4], &btScanned[i].mac[5], &btScanned[i].mactype, btScanned[i].name, &btScanned[i].rssi);
+			}else if(strstr((char *)devices[i+1], "Brcst") - (char *)devices[i+1] >= 16){
+				//Pokud prijde response s broadcastem
+				sscanf((char *)devices[i+1], "%*[%]%02X%02X%02X%02X%02X%02X,%d,%02X,%*[^%]", &btScanned[i].mac[0], &btScanned[i].mac[1], &btScanned[i].mac[2], &btScanned[i].mac[3], &btScanned[i].mac[4], &btScanned[i].mac[5], &btScanned[i].mactype, &btScanned[i].rssi);
+				sprintf(btScanned[i].name, "%02X-%02X-%02X-%02X-%02X-%02X", btScanned[i].mac[0], btScanned[i].mac[1], btScanned[i].mac[2], btScanned[i].mac[3], btScanned[i].mac[4], btScanned[i].mac[5]);
+			}else{
+				//Pokud prijde normalni response
+				sscanf((char *)devices[i+1], "%*[%]%02X%02X%02X%02X%02X%02X,%d,%[^,],%[^,],%02X", &btScanned[i].mac[0], &btScanned[i].mac[1], &btScanned[i].mac[2], &btScanned[i].mac[3], &btScanned[i].mac[4], &btScanned[i].mac[5], &btScanned[i].mactype, btScanned[i].name, btScanned[i].uuid, &btScanned[i].rssi);
+			}
 
-	uint8_t i;
+			//Z vyccnutych dat vytvori item v menu
+			btScanedDevices[i].font = &Font_11x18;
+			btScanedDevices[i].name = btScanned[i].name;
+			btScanedDevices[i].selected = 0;
+			btScanedDevices[i].hasSpecialSelector = 0;
+			btScanedDevices[i].specharNotSelected = 0;
+			btScanedDevices[i].specharSelected = 0;
+			btScanedDevices[i].submenuLevel = 3;
+			btScanedDevices[i].parentItem = &bluetoothmenu[0].name;
 
-	for(i = 0; i < btScannedCount; i++){
-		//Nactou se informace do seznamu zarizeni
-		if(strstr((char *)devices[i+1], ",,") - (char *)devices[i+1] < 16 && strstr((char *)devices[i+1], ",,")){
-			//Pokud prijde response kde neni jmeno
-			sscanf((char *)devices[i+1], "%*[%]%02X%02X%02X%02X%02X%02X,%d,,%[^,],%02X", &btScanned[i].mac[0], &btScanned[i].mac[1], &btScanned[i].mac[2], &btScanned[i].mac[3], &btScanned[i].mac[4], &btScanned[i].mac[5], &btScanned[i].mactype, btScanned[i].uuid, &btScanned[i].rssi);
-		    sprintf(btScanned[i].name, "%02X-%02X-%02X-%02X-%02X-%02X", btScanned[i].mac[0], btScanned[i].mac[1], btScanned[i].mac[2], btScanned[i].mac[3], btScanned[i].mac[4], btScanned[i].mac[5]);
-		}else if(strstr((char *)devices[i+1], ",,") - (char *)devices[i+1] >= 16){
-			//Pokud prijde response bez uuid
-			sscanf((char *)devices[i+1], "%*[%]%02X%02X%02X%02X%02X%02X,%d,%[^,],,%02X", &btScanned[i].mac[0], &btScanned[i].mac[1], &btScanned[i].mac[2], &btScanned[i].mac[3], &btScanned[i].mac[4], &btScanned[i].mac[5], &btScanned[i].mactype, btScanned[i].name, &btScanned[i].rssi);
-		}else if(strstr((char *)devices[i+1], "Brcst") - (char *)devices[i+1] >= 16){
-			//Pokud prijde response s broadcastem
-			sscanf((char *)devices[i+1], "%*[%]%02X%02X%02X%02X%02X%02X,%d,%02X,%*[^%]", &btScanned[i].mac[0], &btScanned[i].mac[1], &btScanned[i].mac[2], &btScanned[i].mac[3], &btScanned[i].mac[4], &btScanned[i].mac[5], &btScanned[i].mactype, &btScanned[i].rssi);
-			sprintf(btScanned[i].name, "%02X-%02X-%02X-%02X-%02X-%02X", btScanned[i].mac[0], btScanned[i].mac[1], btScanned[i].mac[2], btScanned[i].mac[3], btScanned[i].mac[4], btScanned[i].mac[5]);
-		}else{
-			//Pokud prijde normalni response
-			sscanf((char *)devices[i+1], "%*[%]%02X%02X%02X%02X%02X%02X,%d,%[^,],%[^,],%02X", &btScanned[i].mac[0], &btScanned[i].mac[1], &btScanned[i].mac[2], &btScanned[i].mac[3], &btScanned[i].mac[4], &btScanned[i].mac[5], &btScanned[i].mactype, btScanned[i].name, btScanned[i].uuid, &btScanned[i].rssi);
 		}
 
-		btScanedDevices[i].font = &Font_11x18;
-		btScanedDevices[i].name = btScanned[i].name;
-		btScanedDevices[i].selected = 0;
-		btScanedDevices[i].hasSpecialSelector = 0;
-		btScanedDevices[i].specharNotSelected = 0;
-		btScanedDevices[i].specharSelected = 0;
-		btScanedDevices[i].submenuLevel = 3;
-		btScanedDevices[i].parentItem = &bluetoothmenu[0].name;
-
+		//Vytvori tlacitko zpet
+		btScanedDevices[btScannedCount].font = &Font_11x18;
+		btScanedDevices[btScannedCount].name = "Zpet";
+		btScanedDevices[btScannedCount].selected = 0;
+		btScanedDevices[btScannedCount].hasSpecialSelector = 1;
+		btScanedDevices[btScannedCount].specharNotSelected = 36;
+		btScanedDevices[btScannedCount].specharSelected = 37;
+		btScanedDevices[btScannedCount].submenuLevel = 3;
+		btScanedDevices[btScannedCount].parentItem = 0;
 
 	}
 
-
-	btScanedDevices[btScannedCount].font = &Font_11x18;
-	btScanedDevices[btScannedCount].name = "Zpet";
-	btScanedDevices[btScannedCount].selected = 0;
-	btScanedDevices[btScannedCount].hasSpecialSelector = 1;
-	btScanedDevices[btScannedCount].specharNotSelected = 36;
-	btScanedDevices[btScannedCount].specharSelected = 37;
-	btScanedDevices[btScannedCount].submenuLevel = 3;
-	btScanedDevices[btScannedCount].parentItem = 0;
-
-	if(!bluetoothCMD_Until("X\r", BT_AOK, &buff)){
+	//Vypne skenovani
+	if(!bluetoothCMD_Until("X\r", BT_CMD, &buff)){
 		if(!bluetoothLeaveCMD()) return 0;
 		return 0;
 	}
 
+	//Odejde z CMD modu
 	if(!bluetoothLeaveCMD()) return 0;
+
+	//Pokud nic nenaskenoval, vrati 0
+	if(btScannedCount == 0) return 0;
 
 	return 1;
 
 }
 
+//Rutina pro ziskani sparovanych zarizeni
 uint8_t bluetoothGetBondedDevices(){
 
 	char buff[300];
 	memset(buff, 0, 300);
-	//CDC_Transmit_FS("A", 1);
 
+	//Vstoupi do CMD modu
 	if(!bluetoothEnterCMD()) return 0;
 
-	if(!bluetoothCMD_Until("LB\r", "END", &buff)){
+	//Nacte seznam sparovanych zarizeni
+	if(!bluetoothCMD_Until("LB\r", BT_END, &buff)){
 		if(!bluetoothLeaveCMD()) return 0;
 		return 0;
 	}
 
-	/*CDC_Transmit_FS(buff, btRxIndex);
-	CDC_Transmit_FS("\n", 1);*/
-
 	char *devices[20];
-	/*for(int i=0; i < 20; i++){
-		devices[i] = (char*)malloc(100);
-		memset(devices[i], 0, 100);
-	}*/
 
+	//Spocita jejich pocet a rozdeli je na jednotliva zarizeni
 	btBondedCount = countOccurances(buff, "\n");
-	sprintf(oledHeader, "Count: %d", btBondedCount);
 	replacechar(buff, '\r', ' ');
 	splitString(buff, "\n", devices);
 
+	//Pokud nejaka nasel
+	if(btBondedCount != 0){
+
+		uint8_t i;
+
+		//Projde zaznamy a vycucne informace
+		for(i = 0; i < btBondedCount; i++){
+			//Nactou se informace do seznamu zarizeni
+			sscanf((char *)devices[i], "%*d,%02X%02X%02X%02X%02X%02X,%d", &btBonded[i].mac[0], &btBonded[i].mac[1], &btBonded[i].mac[2], &btBonded[i].mac[3], &btBonded[i].mac[4], &btBonded[i].mac[5], &btBonded[i].mactype);
+			sprintf(btBonded[i].name, "%02X-%02X-%02X-%02X-%02X-%02X", btBonded[i].mac[0], btBonded[i].mac[1], btBonded[i].mac[2], btBonded[i].mac[3], btBonded[i].mac[4], btBonded[i].mac[5]);
+
+			//Vytvori item v menu
+			btBondedDevicesMenu[i].font = &Font_11x18;
+			btBondedDevicesMenu[i].name = btBonded[i].name;
+			btBondedDevicesMenu[i].selected = 0;
+			btBondedDevicesMenu[i].hasSpecialSelector = 0;
+			btBondedDevicesMenu[i].specharNotSelected = 0;
+			btBondedDevicesMenu[i].specharSelected = 0;
+			btBondedDevicesMenu[i].submenuLevel = 3;
+			btBondedDevicesMenu[i].parentItem = &bluetoothmenu[0].name;
 
 
-	uint8_t i;
+		}
 
-	for(i = 0; i < btBondedCount; i++){
-		//Nactou se informace do seznamu zarizeni
-		sscanf((char *)devices[i], "%*d,%02X%02X%02X%02X%02X%02X,%d", &btBonded[i].mac[0], &btBonded[i].mac[1], &btBonded[i].mac[2], &btBonded[i].mac[3], &btBonded[i].mac[4], &btBonded[i].mac[5], &btBonded[i].mactype);
-		sprintf(btBonded[i].name, "%02X-%02X-%02X-%02X-%02X-%02X", btBonded[i].mac[0], btBonded[i].mac[1], btBonded[i].mac[2], btBonded[i].mac[3], btBonded[i].mac[4], btBonded[i].mac[5]);
-
-
-		btBondedDevicesMenu[i].font = &Font_11x18;
-		btBondedDevicesMenu[i].name = btBonded[i].name;
-		//sprintf(btScanedDevices[i].name, "%s", btBonded[i].name);
-		btBondedDevicesMenu[i].selected = 0;
-		btBondedDevicesMenu[i].hasSpecialSelector = 0;
-		btBondedDevicesMenu[i].specharNotSelected = 0;
-		btBondedDevicesMenu[i].specharSelected = 0;
-		btBondedDevicesMenu[i].submenuLevel = 3;
-		btBondedDevicesMenu[i].parentItem = &bluetoothmenu[0].name;
-
-
+		//Vytvori tlacitko zpet
+		btBondedDevicesMenu[btBondedCount].font = &Font_11x18;
+		btBondedDevicesMenu[btBondedCount].name = "Zpet";
+		btBondedDevicesMenu[btBondedCount].selected = 0;
+		btBondedDevicesMenu[btBondedCount].hasSpecialSelector = 1;
+		btBondedDevicesMenu[btBondedCount].specharNotSelected = 36;
+		btBondedDevicesMenu[btBondedCount].specharSelected = 37;
+		btBondedDevicesMenu[btBondedCount].submenuLevel = 3;
+		btBondedDevicesMenu[btBondedCount].parentItem = 0;
 	}
 
-
-	btBondedDevicesMenu[btBondedCount].font = &Font_11x18;
-	btBondedDevicesMenu[btBondedCount].name = "Zpet";
-	btBondedDevicesMenu[btBondedCount].selected = 0;
-	btBondedDevicesMenu[btBondedCount].hasSpecialSelector = 1;
-	btBondedDevicesMenu[btBondedCount].specharNotSelected = 36;
-	btBondedDevicesMenu[btBondedCount].specharSelected = 37;
-	btBondedDevicesMenu[btBondedCount].submenuLevel = 3;
-	btBondedDevicesMenu[btBondedCount].parentItem = 0;
-
+	//Odejde z CMD modu
 	if(!bluetoothLeaveCMD()) return 0;
+
+	//Pokud nenasel zadna zarizeni, vrati 0
+	if(btBondedCount == 0) return 0;
 
 	return 1;
 
 }
 
+//Rutina pro ziskani zarizeni pro parovani (stejne jako skenovani akorat cpe do jineho menu)
+uint8_t bluetoothGetBondableDevices(){
 
+	char buff[300];
+	memset(buff, 0, 300);
+
+	//Vstoupi do CMD modu
+	if(!bluetoothEnterCMD()) return 0;
+
+	//Skenuje 15s
+	if(!bluetoothCMD_Time("F\r", 30, &buff)){
+		if(!bluetoothLeaveCMD()) return 0;
+		return 0;
+	}
+
+	char *devices[20];
+
+	//Spocita pocet zarizeni a rozdeli vracene stringy na jednotliva zarizeni
+	btBondableCount = countOccurances(buff, "%")/2;
+	replacechar(buff, '\r', ' ');
+	splitString(buff, "\n", devices);
+
+	//Pokud nasel zarizeni v okoli
+	if(btBondableCount != 0){
+		uint8_t i;
+
+		//Projde seznam a z ruznych typu odpovedi vycucne data
+		for(i = 0; i < btBondableCount; i++){
+
+			//Nactou se informace do seznamu zarizeni
+			if(strstr((char *)devices[i+1], ",,") - (char *)devices[i+1] < 16 && strstr((char *)devices[i+1], ",,")){
+				//Pokud prijde response kde neni jmeno
+				sscanf((char *)devices[i+1], "%*[%]%02X%02X%02X%02X%02X%02X,%d,,%[^,],%02X", &btBondable[i].mac[0], &btBondable[i].mac[1], &btBondable[i].mac[2], &btBondable[i].mac[3], &btBondable[i].mac[4], &btBondable[i].mac[5], &btBondable[i].mactype, btBondable[i].uuid, &btBondable[i].rssi);
+				sprintf(btBondable[i].name, "%02X-%02X-%02X-%02X-%02X-%02X", btBondable[i].mac[0], btBondable[i].mac[1], btBondable[i].mac[2], btBondable[i].mac[3], btBondable[i].mac[4], btBondable[i].mac[5]);
+			}else if(strstr((char *)devices[i+1], ",,") - (char *)devices[i+1] >= 16){
+				//Pokud prijde response bez uuid
+				sscanf((char *)devices[i+1], "%*[%]%02X%02X%02X%02X%02X%02X,%d,%[^,],,%02X", &btBondable[i].mac[0], &btBondable[i].mac[1], &btBondable[i].mac[2], &btBondable[i].mac[3], &btBondable[i].mac[4], &btBondable[i].mac[5], &btBondable[i].mactype, btBondable[i].name, &btBondable[i].rssi);
+			}else if(strstr((char *)devices[i+1], "Brcst") - (char *)devices[i+1] >= 16){
+				//Pokud prijde response s broadcastem
+				sscanf((char *)devices[i+1], "%*[%]%02X%02X%02X%02X%02X%02X,%d,%02X,%*[^%]", &btBondable[i].mac[0], &btBondable[i].mac[1], &btBondable[i].mac[2], &btBondable[i].mac[3], &btBondable[i].mac[4], &btBondable[i].mac[5], &btBondable[i].mactype, &btBondable[i].rssi);
+				sprintf(btBondable[i].name, "%02X-%02X-%02X-%02X-%02X-%02X", btBondable[i].mac[0], btBondable[i].mac[1], btBondable[i].mac[2], btBondable[i].mac[3], btBondable[i].mac[4], btBondable[i].mac[5]);
+			}else{
+				//Pokud prijde normalni response
+				sscanf((char *)devices[i+1], "%*[%]%02X%02X%02X%02X%02X%02X,%d,%[^,],%[^,],%02X", &btBondable[i].mac[0], &btBondable[i].mac[1], &btBondable[i].mac[2], &btBondable[i].mac[3], &btBondable[i].mac[4], &btBondable[i].mac[5], &btBondable[i].mactype, btBondable[i].name, btBondable[i].uuid, &btBondable[i].rssi);
+			}
+
+			//Vytvori item v menu
+			btBondableDevices[i].font = &Font_11x18;
+			btBondableDevices[i].name = btBondable[i].name;
+			btBondableDevices[i].selected = 0;
+			btBondableDevices[i].hasSpecialSelector = 0;
+			btBondableDevices[i].specharNotSelected = 0;
+			btBondableDevices[i].specharSelected = 0;
+			btBondableDevices[i].submenuLevel = 3;
+			btBondableDevices[i].parentItem = &bluetoothmenu[0].name;
+
+
+		}
+
+		//Vytvori tacitko zpet
+		btBondableDevices[btBondableCount].font = &Font_11x18;
+		btBondableDevices[btBondableCount].name = "Zpet";
+		btBondableDevices[btBondableCount].selected = 0;
+		btBondableDevices[btBondableCount].hasSpecialSelector = 1;
+		btBondableDevices[btBondableCount].specharNotSelected = 36;
+		btBondableDevices[btBondableCount].specharSelected = 37;
+		btBondableDevices[btBondableCount].submenuLevel = 3;
+		btBondableDevices[btBondableCount].parentItem = 0;
+
+	}
+
+	//Ukonci skenovani
+	if(!bluetoothCMD_Until("X\r", BT_CMD, &buff)){
+		if(!bluetoothLeaveCMD()) return 0;
+		return 0;
+	}
+
+	//Odejde z CMD modu
+	if(!bluetoothLeaveCMD()) return 0;
+
+	//Pokud nenasel zarizeni, vrati 0
+	if(btBondableCount == 0) return 0;
+
+	return 1;
+}
+
+//Rutina pro pripojeni k zarizeni
+uint8_t bluetoothConnect(char * mac){
+	//Vstoupi do CMD modu
+	if(!btCmdMode) bluetoothEnterCMD();
+	//Okopiruje si MAC
+	char * cmd = (char *) malloc(50);
+	//Vysle prikaz pro pripojeni
+	sprintf(cmd, "C,0,%s\r", mac);
+	sprintf(oledHeader, "%s" ,cmd);
+	//Pokud se pripojeni nepovedlo, vrati 0
+	if(!bluetoothCMD_ACK(cmd, "%STREAM_OPEN")){
+		//Odejde z CMD modu
+		bluetoothLeaveCMD();
+		return 0;
+	}else btStreamOpen = 1;
+
+	//Odejde z CMD modu
+	//bluetoothLeaveCMD();
+
+	return 1;
+}
+
+uint8_t bluetoothBond(){
+	//Vstoupi do CMD modu
+	if(!btCmdMode) bluetoothEnterCMD();
+
+	//Odesle parovaci prikaz
+	if(!bluetoothCMD_ACK("B\r", "%BONDED")){
+		//Pokud se nepovedlo, odejde z CMD modu
+		bluetoothLeaveCMD();
+		//Vrati 0
+		return 0;
+	}else btStreamOpen = 1;
+
+	//Odejde z CMD modu
+	bluetoothLeaveCMD();
+
+	return 1;
+}
+
+//Rutina pro pocitani vyskytu v textu
 uint32_t countOccurances(char * buff, char * what){
 	uint32_t count = 0;
 	const char * tmp = buff;
@@ -391,6 +567,7 @@ uint32_t countOccurances(char * buff, char * what){
 	return count;
 }
 
+//Rutina pro nahrazeni charakteru v textu
 uint32_t replacechar(char *str, char orig, char rep){
     char *ix = str;
     uint32_t n = 0;
@@ -401,6 +578,7 @@ uint32_t replacechar(char *str, char orig, char rep){
     return n;
 }
 
+//Rutina pro rozdeleni stringu na substringy
 uint32_t splitString(char * string, char * delim, char ** array){
 
 	uint32_t count = 0;

@@ -44,7 +44,6 @@ void oled_menuOnclick(int menupos);
 void oled_StartSplash();
 void oled_UsbWaitingSplash();
 void oled_LoadingSplash(char * msg);
-void oled_BtDevPairCompleteSplash();
 void oled_BtDevInfoSplash(struct btDevice * dev);
 void oled_BtDevPairRequestSplash(struct btDevice * dev);
 void oled_BtDevKeyRequestSplash(struct btDevice * dev);
@@ -54,5 +53,8 @@ void oled_playingSplash(char * songname);
 void oled_recordingSplash(char * songname);
 void oled_refreshPause();
 void oled_refreshresume();
+void oled_BtDevPairCompleteSplash(char * msg);
+void oled_NothingFound();
+void oled_ErrorSplash(char * msg);
 
 #endif

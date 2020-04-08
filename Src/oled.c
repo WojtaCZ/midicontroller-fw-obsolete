@@ -9,9 +9,13 @@
 #include <math.h>
 #include "msgDecoder.h"
 
+
+//Jednotliva MENU
+
 struct menuitem mainmenu[] = {
 		{"Prehraj", 0, &Font_11x18, 0, 0, 0, 0, 0/*, 0, 0*/},
 		{"Nahraj", 0, &Font_11x18, 0, 0, 0, 0, 0/*, 0, 0*/},
+		{"Varhany", 0, &Font_11x18, 0, 0, 0, 0, 0/*, 0, 0*/},
 		{"Nastaveni", 0, &Font_11x18, 0, 0, 0, 0, 0/*, &settingsmenu, "settingsmenu"*/}
 };
 
@@ -22,92 +26,170 @@ struct menuitem settingsmenu[] = {
 
 struct menuitem bluetoothmenu[] = {
 		{"Skenovat", 0, &Font_11x18, 0, 0, 0, 2, &settingsmenu[0].name/*, 0, 0*/},
-		{"Sparovat", 0, &Font_11x18, 0, 0, 0, 2, &settingsmenu[0].name/*, 0, 0*/},
+		{"Sparovana zarizeni", 0, &Font_11x18, 0, 0, 0, 0, 0/*, 0, 0*/},
 		{"Informace", 0, &Font_11x18, 0, 0, 0, 2, &settingsmenu[0].name/*, 0, 0*/},
 		{"Zpet", 0, &Font_11x18, 1, 36, 37, 2, 0/*, 0, 0*/}
 };
 
+struct menuitem organmenu[] = {
+		{"Zapnout", 0, &Font_11x18, 0, 0, 0, 2, &mainmenu[2].name/*, 0, 0*/},
+		{"Vypnout", 0, &Font_11x18, 0, 0, 0, 2, &mainmenu[2].name/*, 0, 0*/},
+		{"Zpet", 0, &Font_11x18, 1, 36, 37, 2, 0/*, 0, 0*/}
+};
+
+struct menuitem controllermenu[] = {
+		{"Odstranit", 0, &Font_11x18, 0, 0, 0, 2, &btBondedDevicesMenu[0].name/*, 0, 0*/},
+		{"Zpet", 0, &Font_11x18, 1, 36, 37, 2, 0/*, 0, 0*/}
+};
 
 
-
+//Rutina ktera se vykona pri kliknuti v menu
 void oled_menuOnclick(int menupos){
 
+	//Zaznamena se nazev menu
 	char menunameold[255];
+	char msg[50];
 	memcpy(&menunameold, dispmenuname, strlen(dispmenuname)+1);
 
+	//Zjisti se v jakem menu uzivatel kliknul
 	if(strcmp(dispmenuname, "mainmenu") == 0){
 
 		switch(menupos){
 			case 0:
-				midiController_play(ADDRESS_CONTROLLER, "bumble_bee");
+				//Odesle zpravu pro ziskani pisni
+				msg[0] = 0x00;
+				msg[1] = 0x04;
+				workerAssert(&workerGetSongs);
+				sendMsg(ADDRESS_MAIN, ADDRESS_PC, 0, INTERNAL, msg, 2);
 			break;
 
 			case 1:
+				//Odesle zpravu pro nahravani
+				oled_refreshPause();
 			break;
 
 			case 2:
-				oled_setDisplayedMenu("settingsmenu",&settingsmenu, sizeof(settingsmenu), 1);
+				//Zobrazi menu varhan
+				oled_setDisplayedMenu("organmenu",&organmenu, sizeof(organmenu), 1);
 			break;
 
 			default:
+				//Nacte menu nastaveni
+				oled_setDisplayedMenu("settingsmenu",&settingsmenu, sizeof(settingsmenu), 1);
 			break;
 		}
 
 	}else if(strcmp(dispmenuname, "settingsmenu") == 0){
 		switch(menupos){
 			case 0:
+				//Nacte bluetooth menu
 				oled_setDisplayedMenu("bluetoothmenu",&bluetoothmenu, sizeof(bluetoothmenu), 1);
 			break;
 
 			case 1:
-				oled_setDisplayedMenu("mainmenu",&mainmenu, sizeof(mainmenu), 0);
+			break;
+
+			case 2:
 			break;
 
 			default:
+				//Vrati se do hlavniho menu
+				oled_setDisplayedMenu("mainmenu",&mainmenu, sizeof(mainmenu), 0);
 			break;
 		}
 	}else if(strcmp(dispmenuname, "bluetoothmenu") == 0){
 		switch(menupos){
 			case 0:
+				//Zacne skenovani
 				oled_setDisplayedSplash(oled_LoadingSplash, "Skenuji");
-				workerBtScanDev = 1;
+				workerAssert(&workerBtScanDev);
 			break;
 
 			case 1:
-
+				//Nacte sparovane ovladace
+				oled_setDisplayedSplash(oled_LoadingSplash, "Nacitam");
+				workerAssert(&workerBtBondDev);
 			break;
 
 			case 2:
+				//Nacte info o sobe
 				bluetooth_refreshSelfInfo();
 			break;
 
-			case 3:
+			default:
+				//Vrati se do nastaveni
 				oled_setDisplayedMenu("settingsmenu",&settingsmenu, sizeof(settingsmenu), 0);
 			break;
-
-			default:
-			break;
+		}
+	}else if(strcmp(dispmenuname, "songmenu") == 0){
+		if(menupos == songMenuSize){
+			//Vrati se do hlavniho menu
+			oled_setDisplayedMenu("mainmenu",&mainmenu, sizeof(mainmenu), 0);
+		}else{
+			memset(selectedSong, 0, 40);
+			sprintf(selectedSong, "%s", songMenu[encoderpos].name);
+			//memcpy(&selectedSong[0], songMenu[encoderpos].name, strlen(songMenu[encoderpos].name));
+			midiController_play(ADDRESS_MAIN, selectedSong);
 		}
 	}else if(strcmp(dispmenuname, "btScanedDevices") == 0){
 		if(menupos == btScannedCount){
-				oled_setDisplayedMenu("bluetoothmenu",&bluetoothmenu, sizeof(bluetoothmenu), 0);
+			//Vrati se do bluetooth menu
+			oled_setDisplayedMenu("bluetoothmenu",&bluetoothmenu, sizeof(bluetoothmenu), 0);
 		}else{
+			//Ukaze info o zarizeni
 			oled_setDisplayedSplash(oled_BtDevInfoSplash, &btScanned[menupos]);
 		}
 	}else if(strcmp(dispmenuname, "btBondedDevicesMenu") == 0){
 		if(menupos == btBondedCount){
-			oled_setDisplayedMenu("mainmenu",&mainmenu, sizeof(mainmenu), 0);
+			//Vrati se do nastaveni
+			oled_setDisplayedMenu("settingsmenu",&settingsmenu, sizeof(settingsmenu), 0);
+		}else{
+			//Ukaze menu ovladacu
+			btSelectedController = menupos;
+			encoderpos = 1;
+			oled_setDisplayedMenu("controllermenu",&controllermenu, sizeof(controllermenu), 0);
 		}
+	}else if(strcmp(dispmenuname, "controllermenu") == 0){
+		switch(menupos){
+			case 0:
+				//Odstrani ovladac
+				workerBtRemoveController.assert = 1;
+			break;
+
+			default:
+				//Vrati se do hlavniho menu
+				oled_setDisplayedMenu("btBondedDevicesMenu", &btBondedDevicesMenu, sizeof(btBondedDevicesMenu)-(10-btBondedCount-1)*sizeof(btBondedDevicesMenu[9]), 0);
+			break;
+		}
+	}else if(strcmp(dispmenuname, "organmenu") == 0){
+		switch(menupos){
+					case 0:
+						//Zapne proudový zdroj
+						midiController_current_On();
+					break;
+
+					case 1:
+						//Vypne proudový zdroj
+						midiController_current_Off();
+					break;
+
+					default:
+						//Vrati se zpet do hlavniho menu
+						oled_setDisplayedMenu("mainmenu",&mainmenu, sizeof(mainmenu), 0);
+					break;
+				}
 	}
+
+
 	encoderclick = 0;
 
 	if(strcmp(dispmenuname, menunameold) != 0) encoderpos = 0;
 }
 
 void oled_begin(){
-	//inicializuje se driver oled
+	//Inicializuje se driver oled
 	ssd1306_Init();
-	//Zapne se obnova OLED
+	//Nastavi se defaultni menu a splash screen
 	oled_setDisplayedMenu("mainmenu", &mainmenu, sizeof(mainmenu), 0);
 	oled_setDisplayedSplash(oled_StartSplash, "");
 	refreshHalt = 0;
@@ -116,26 +198,30 @@ void oled_begin(){
 	scrollPause = 0;
 	scrollPauseDone = 0;
 	loadingToggle = 0;
+
+	//Zapnou se casovace pro obnovu OLED a scrollovani
 	HAL_TIM_Base_Start_IT(&htim2);
 	HAL_TIM_Base_Start_IT(&htim3);
 	oledHeader = (char*)malloc(50);
 }
 
-void oled_refresh(){
-	if(!refreshHalt){
-		ssd1306_Fill(0);
-		if(oledType == OLED_MENU){
-			oled_drawMenu();
-		}else if(oledType == OLED_SPLASH){
-			(*splashFunction)(splashParams);
-			ssd1306_UpdateScreen(0);
-		}
-	}
 
+//Rutina pro obnovu OLED
+void oled_refresh(){
+	//Vyplni se cernou
+	ssd1306_Fill(0);
+	if(oledType == OLED_MENU){
+		//Pokud se ma zobrazovat menu, vykresli se
+		oled_drawMenu();
+	}else if(oledType == OLED_SPLASH){
+		//Pokud se ma zobrazit splash screen, zobrazi se
+		(*splashFunction)(splashParams);
+		ssd1306_UpdateScreen(0);
+	}
 }
 
 void oled_setDisplayedMenu(char *menuname ,struct menuitem (*menu)[], int menusize, int issubmenu){
-	//HAL_TIM_Base_Stop_IT(&htim2);
+	//Data z menu se okopiruji do zobrazovaneho dispmenu
 	dispmenuname = malloc(strlen(menuname)+1);
 	dispmenusize = menusize/sizeof(struct menuitem);
 	memcpy(dispmenuname, menuname, strlen(menuname)+1);
@@ -144,34 +230,32 @@ void oled_setDisplayedMenu(char *menuname ,struct menuitem (*menu)[], int menusi
 	encoderposOld = -1;
 	encoderpos = 0;
 	oledType = OLED_MENU;
-	//HAL_TIM_Base_Start_IT(&htim2);
 }
 
 void oled_setDisplayedSplash(void (*funct)(), void * params){
-	//HAL_TIM_Base_Stop_IT(&htim2);
+	//Nastavi se pointery na vykonavanou funkci pri splash screen
 	loadingStat = 1;
 	splashFunction = funct;
 	splashParams = params;
 	oledType = OLED_SPLASH;
-	//HAL_TIM_Base_Start_IT(&htim2);
 
 }
 
 void oled_drawMenu(){
 
+	//Pokud bylo kliknuto, provedou se portrebne fce
 	if(encoderclick){
 		oled_menuOnclick(encoderpos);
-		/*if(dispmenu[encoderpos].submenu != 0){
-			//oled_setDisplayedMenu(dispmenu[encoderpos].submenuname, &dispmenu[encoderpos].submenu, sizeof(dispmenu[encoderpos].submenu));
-		}*/
 	}
 
-	/*RTC_TimeTypeDef time;
+	//Ziska se aktualni cas
+	RTC_TimeTypeDef time;
 	RTC_DateTypeDef date;
 	HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN);
-	HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN);*/
+	HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN);
 
-	//sprintf(oledHeader, "%d.%d %d:%d",date.Date, date.Month, time.Hours, time.Minutes);
+	//Vypise se hlavicka
+	sprintf(oledHeader, "%d.%d %d:%d",date.Date, date.Month, time.Hours, time.Minutes);
 	//sprintf(oledHeader, "E: %d N: %s", encoderpos, dispmenu[encoderpos].name);
 	//sprintf(oledHeader, "Disp: %d", HAL_GPIO_ReadPin(DISP_SENSE_GPIO_Port, DISP_SENSE_Pin));
 	//oledHeader = "MIDIControll 0.1";
@@ -179,7 +263,8 @@ void oled_drawMenu(){
 	//sprintf(oledHeader, "E: %d", loadingStat);
 	ssd1306_SetCursor(2,0);
 	ssd1306_WriteString(oledHeader, Font_7x10, White);
-
+	ssd1306_SetCursor(2,114);
+	ssd1306_WriteChar(' ', Icon_7x10, White);
 	//for(uint8_t i = 0; i <= 128; i++) ssd1306_DrawPixel(i, 13, White);
 
 
@@ -199,8 +284,6 @@ void oled_drawMenu(){
 			if(i == encoderpos){
 				dispmenu[i].selected = 1;
 			}else dispmenu[i].selected = 0;
-			/*ssd1306_SetCursor(OLED_MENU_LEFT_PADDING, (i-encoderpos+1)*OLED_MENU_TEXT_HEIGHT + OLED_MENU_TOP_PADDING);
-			ssd1306_WriteChar(33-(dispmenu[i].selected), Icon_11x18, White);*/
 
 			ssd1306_SetCursor(OLED_MENU_LEFT_PADDING + OLED_MENU_TEXT_WIDTH,(i-encoderpos+1)*OLED_MENU_TEXT_HEIGHT + OLED_MENU_TOP_PADDING);
 
@@ -288,17 +371,19 @@ void oled_drawMenu(){
 
 }
 
-
+//Funkce pro zastaveni/zpomaleni refreshe na nutne minimum
 void oled_refreshPause(){
-	oled_refresh();
 	refreshHalt = 1;
 }
 
+//Funkce pro zapnuti refreshe
 void oled_refreshResume(){
 	refreshHalt = 0;
 }
 
+//Funkce vykreslujici zapinaci obrazovku
 void oled_StartSplash(){
+	//Vypisou se texty
 	ssd1306_SetCursor(3, 10);
 	ssd1306_WriteString("MIDIControl", Font_11x18, White);
 
@@ -309,13 +394,17 @@ void oled_StartSplash(){
 	ssd1306_SetCursor((128-(strlen(version)-1)*7)/2,50);
 	ssd1306_WriteString(version, Font_7x10, White);
 
+	//Vyporada se s kliknutim tlacitka
 	encoderclick = 0;
 }
 
+//Funkce pro vykresleni libovolneho textu s nacitacimi puntiky
 void oled_LoadingSplash(char * msg){
+	//Vypise se text
 	ssd1306_SetCursor((128-(strlen(msg)-1)*11)/2, 15);
 	ssd1306_WriteString(msg, Font_11x18, White);
 
+	//Vykresli se puntiky
 	ssd1306_SetCursor(42,35);
 	ssd1306_WriteChar(33 - (loadingStat & 0x01), Icon_11x18, White);
 	ssd1306_SetCursor(64,35);
@@ -326,7 +415,21 @@ void oled_LoadingSplash(char * msg){
 
 }
 
+//Funkce pro vypsani chyby
+void oled_ErrorSplash(char * msg){
+	ssd1306_SetCursor((128-(strlen("Chyba!")-1)*11)/2, 15);
+	ssd1306_WriteString("Chyba!", Font_11x18, White);
+
+	ssd1306_SetCursor((128-(strlen(msg)-1)*7)/2, 15);
+	ssd1306_WriteString(msg, Font_7x10, White);
+
+	encoderclick = 0;
+
+}
+
+//Funkce pro vykresleni obrazovky "Cekman na pripojeni USB"
 void oled_UsbWaitingSplash(){
+	//Vykresli se texty
 	char * msg = "Cekam na";
 	ssd1306_SetCursor((128-(strlen(msg)-1)*11)/2, 1);
 	ssd1306_WriteString(msg, Font_11x18, White);
@@ -334,6 +437,7 @@ void oled_UsbWaitingSplash(){
 	ssd1306_SetCursor((128-(strlen(msg)-1)*11)/2, 23);
 	ssd1306_WriteString(msg, Font_11x18, White);
 
+	//VYkresli se puntiky
 	ssd1306_SetCursor(42,50);
 	ssd1306_WriteChar(33 - (loadingStat & 0x01), Icon_11x18, White);
 	ssd1306_SetCursor(64,50);
@@ -343,8 +447,26 @@ void oled_UsbWaitingSplash(){
 	encoderclick = 0;
 }
 
+//Funkce vykreslujici "Zadne vysledky"
+void oled_NothingFound(){
+	char * msg = "Zadne";
+	ssd1306_SetCursor((128-(strlen(msg)-1)*11)/2, 1);
+	ssd1306_WriteString(msg, Font_11x18, White);
+	msg = "vysledky";
+	ssd1306_SetCursor((128-(strlen(msg)-1)*11)/2, 23);
+	ssd1306_WriteString(msg, Font_11x18, White);
+
+	if(encoderclick){
+		oledType = OLED_MENU;
+		encoderclick = 0;
+	}
+}
+
+
+//Funkce vykreslujici ze struktry info obrazovku o zarizeni
 void oled_BtDevInfoSplash(struct btDevice * dev){
 
+	//Nastavi se scrollovani pokud je jmeno delsi nez obrazovka
 	if(strlen(dev->name) > 9){
 		scrollMax = (strlen(dev->name) - 10);
 		ssd1306_SetCursor(14, 1);
@@ -357,23 +479,26 @@ void oled_BtDevInfoSplash(struct btDevice * dev){
 		ssd1306_WriteString(dev->name, Font_11x18, White);
 	}
 
-	/*ssd1306_SetCursor((128-(strlen("MAC")-1)*7)/2, 30);
-	ssd1306_WriteString("MAC", Font_7x10, White);*/
+	//Vypisou se udaje
 	char msg[25];
 	sprintf(msg, "%02X-%02X-%02X-%02X-%02X-%02X", dev->mac[0], dev->mac[1], dev->mac[2], dev->mac[3], dev->mac[4], dev->mac[5]);
-	ssd1306_SetCursor(((128-((float)strlen(msg)-0.5)*7)/2), 30);
+	ssd1306_SetCursor((128-(strlen(msg)-1)*7)/2, 30);
 	ssd1306_WriteString(msg, Font_7x10, White);
 
+	//Vypise se RSSI
 	sprintf(msg, "RSSI: %ddB", dev->rssi);
-	ssd1306_SetCursor(((128-((float)strlen(msg)-0.5)*7)/2), 43);
+	ssd1306_SetCursor((128-(strlen(msg)-1)*7)/2, 43);
 	ssd1306_WriteString(msg, Font_7x10, White);
 
 
+	//Pokud se klikne, vrati se do menu
 	if(encoderclick){
 		oledType = OLED_MENU;
 		encoderclick = 0;
 	}
 }
+
+
 
 void oled_BtDevPairRequestSplash(struct btDevice * dev){
 
@@ -558,28 +683,28 @@ void oled_BtDevKeyEnterSplash(struct btDevice * dev){
 	}
 
 	if(encoderclick){
-		workerBtEnterPairingKey = 1;
+		 workerAssert(&workerBtEnterPairingKey);
 		oledType = OLED_MENU;
 		encoderclick = 0;
 	}
 }
 
-void oled_BtDevPairCompleteSplash(){
+//Obrazovka vypisujici "Parovani kompletni"
+void oled_BtDevPairCompleteSplash(char * msg){
 
-	char msg[25];
-
-	sprintf(msg, "Uspesne");
-	ssd1306_SetCursor((128-(strlen(msg)-1)*11)/2, 1);
-	ssd1306_WriteString(msg, Font_11x18, White);
-	sprintf(msg, "sparovano");
+	//Vypise se hlaska
 	ssd1306_SetCursor((128-(strlen(msg)-1)*11)/2, 25);
 	ssd1306_WriteString(msg, Font_11x18, White);
 
+	char * msg2 = "Parovani";
+	ssd1306_SetCursor((128-(strlen(msg2)-1)*11)/2, 1);
+	ssd1306_WriteString(msg2, Font_11x18, White);
 
-
+	//Pri kliknuti skoci zpet do menu
 	if(encoderclick){
-		oledType = OLED_MENU;
 		encoderclick = 0;
+		oled_setDisplayedMenu("mainmenu",&mainmenu, sizeof(mainmenu), 0);
+		oledType = OLED_MENU;
 	}
 }
 

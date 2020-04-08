@@ -6,29 +6,6 @@
 
 extern uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len);
 
-/*void decodeMessage(char *msg, uint32_t len){
-	sprintf(oledHeader, "%s", msg);
-
-	switch(msg[0]){
-		case MSG_TYPE_INTERNAL:
-			internalMessageDecoder(msg, len);
-		break;
-
-		case MSG_TYPE_BLUETOOTH:
-
-		break;
-
-		case MSG_TYPE_DISPLAY:
-
-		break;
-	}
-
-	//Odešle se ACK
-	uint8_t answer[] = {0x00, 0x00, 0x00, 0x00, 0x00, 0x02, msg[0], 0x01};
-	CDC_Transmit_FS(answer, sizeof(answer));
-}
-*/
-
 void decodeMessage(char * msg, uint16_t len, uint8_t broadcast){
 
 	//Internal
@@ -98,21 +75,21 @@ void sendMsg(uint8_t src, uint8_t dest, uint8_t broadcast, uint8_t type, char * 
 	buffer[1] = 0;
 	buffer[2] = 0;
 	buffer[3] = 0;
-	buffer[4] = (len >> 4) & 0xff;
-	buffer[5] = len & 0xff;
+	buffer[4] = ((len+1) >> 4) & 0xff;
+	buffer[5] = (len+1) & 0xff;
 	buffer[6] = ((type & 0x07) << 5) | ((src & 0x3) << 3) | ((broadcast & 0x01) << 2) | (dest & 0x03);
 	memcpy(&buffer[7], msg, len);
 
 	if(broadcast){
 		//CDC_Transmit_FS(buffer, len+6);
-		HAL_UART_Transmit_IT(&huart2, buffer, len+6);
+		if(btStreamOpen && !btCmdMode) HAL_UART_Transmit_IT(&huart2, buffer, len+7);
 	}else if(dest == ADDRESS_PC){
 		//CDC_Transmit_FS(buffer, len+6);
-		HAL_UART_Transmit_IT(&huart2, buffer, len+6);
+		if(btStreamOpen && !btCmdMode) HAL_UART_Transmit_IT(&huart2, buffer, len+7);
 	}else if(dest == ADDRESS_MAIN){
-		HAL_UART_Transmit_IT(&huart2, buffer, len+6);
+		if(btStreamOpen && !btCmdMode) HAL_UART_Transmit_IT(&huart2, buffer, len+7);
 	}else if(dest == ADDRESS_OTHER){
-		HAL_UART_Transmit_IT(&huart2, buffer, len+6);
+		if(btStreamOpen && !btCmdMode) HAL_UART_Transmit_IT(&huart2, buffer, len+7);
 	}
 
 }

@@ -133,6 +133,21 @@ int main(void)
 
   bluetoothInit();
 
+  if(bluetoothConnectKnown()){
+	  //bluetoothLeaveCMD();
+	  //bluetoothEnterCMD();
+
+	  /*if(!bluetoothCMD_ACK("I\r", "%STREAM_OPEN")){
+	  		//Odejde z CMD modu
+	  		//bluetoothLeaveCMD();
+	  }*/
+
+	//  bluetoothLeaveCMD();
+  	  btStreamOpen = 1;
+  	  btCmdMode = 0;
+  	  sprintf(oledHeader, "Conn");
+   }
+
 
   oledType = OLED_MENU;
   /* USER CODE END 2 */
@@ -143,16 +158,17 @@ int main(void)
   {
 
 	  //Pokud byl request na skenovani
-	 	  if(workerBtScanDev){
+	 	  if(workerBtScanDev.assert){
 	 		 bluetoothGetScannedDevices();
 	 		 oled_setDisplayedMenu("btScanedDevices", &btScanedDevices, sizeof(btScanedDevices)-(20-btScannedCount-1)*sizeof(btScanedDevices[19]), 0);
-	 		 workerBtScanDev = 0;
+	 		 workerDesert(&workerBtScanDev);
+
 	 	  }
 
-	 	  if(workerBtBondDev){
+	 	  if(workerBtBondDev.assert){
 	 		 bluetoothGetBondedDevices();
 	 		 oled_setDisplayedMenu("btBondedDevicesMenu", &btBondedDevicesMenu, sizeof(btBondedDevicesMenu)-(10-btBondedCount-1)*sizeof(btBondedDevicesMenu[9]), 0);
-	 		 workerBtBondDev = 0;
+	 		 workerDesert(&workerBtBondDev);
 	 	  }
 
 	 	  if(btMsgReceivedFlag){
@@ -160,14 +176,31 @@ int main(void)
 	 		  btMsgReceivedFlag = 0;
 	 	  }
 
-	 	  if(workerBtEnterPairingKey){
+	 	  if(workerBtEnterPairingKey.assert){
 	 		  if(!btCmdMode) bluetoothEnterCMD();
 	 		  char pin[10];
 	 		  sprintf(pin, "%06ld\r", btPairReq.pin);
 	 		  bluetoothCMD_ACK(pin, "");
 	 		 if(btCmdMode) bluetoothLeaveCMD();
-	 		 workerBtEnterPairingKey = 0;
+	 		 workerDesert(&workerBtEnterPairingKey);
 	 	  }
+
+	 	 if(workerBtConnect.assert){
+	 		 bluetoothConnect(workerBtConnectMAC);
+
+	 		 workerBtConnect.assert = 0;
+	 	 }
+
+
+	 	if(workerGetSongs.assert){
+	 		if(workerGetSongs.status == WORKER_OK){
+	 			oled_setDisplayedMenu("songmenu",&songMenu, (songMenuSize+1)*sizeof(struct menuitem), 1);
+	 			workerGetSongs.assert = 0;
+	 		}else if(workerGetSongs.status == WORKER_ERR){
+	 			oled_setDisplayedSplash(oled_ErrorSplash, "pri nacitani pisni");
+	 			workerGetSongs.assert = 0;
+	 		}
+	 	}
 
     /* USER CODE END WHILE */
 
@@ -359,7 +392,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		keypad.changed = 1;
 		x++;
 
-		sprintf(oledHeader, "%d %d", x,  keypad.enter);
+		//sprintf(oledHeader, "%d %d", x,  keypad.enter);
 
 		HAL_NVIC_ClearPendingIRQ(EXTI4_15_IRQn);
 		HAL_NVIC_EnableIRQ(EXTI4_15_IRQn);
