@@ -10,7 +10,7 @@ extern struct menuitem bluetoothmenu[];
 
 #define BT_CMD "CMD>"
 #define BT_AOK "AOK"
-#define BT_END "END\r\n"
+#define BT_END "END\r"
 
 #define BT_TIMEOUT 2000
 

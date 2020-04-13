@@ -24,17 +24,19 @@ struct worker{
 };
 
 
-uint8_t alivePC, aliveRemote, alivePCCounter, aliveRemoteCounter;
+uint8_t alivePC, aliveMain, alivePCCounter, aliveMainCounter;
+
+uint8_t btData, btDataIcon, battStatus;
 
 //Flagy pro "workery"
-struct worker workerBtScanDev, workerBtConnect, workerBtBondDev, workerBtEnterPairingKey, workerBtRemoveController, workerGetSongs;
+struct worker workerBtScanDev, workerBtConnect, workerBtBondDev, workerBtEnterPairingKey, workerBtRemoveController, workerGetSongs, workerMiscelaneous;
 
 char * workerBtConnectMAC;
 
 void workerAssert(struct worker * wrk);
 void workerDesert(struct worker * wrk);
 
-uint32_t midiControl_checkKeyboard();
+uint32_t midiController_checkKeyboard();
 void midiController_record(uint8_t initiator, char * songname);
 void midiController_play(uint8_t initiator, char * songname);
 void midiController_stop(uint8_t initiator);
@@ -46,7 +48,7 @@ void midiController_current_Off();
 void midiController_keepalive_process();
 uint8_t midiController_setDisplay(uint16_t cislo_pisne, uint8_t cislo_sloky, uint8_t barva, uint8_t napev);
 uint8_t midiController_setDisplayRaw(uint8_t * data, uint16_t len);
-
+void midiControl_get_time();
 
 struct keyboard{
 	uint8_t one;

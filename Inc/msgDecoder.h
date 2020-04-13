@@ -3,13 +3,16 @@
 
 #include <stdio.h>
 #include <stdint.h>
-
 //Typy zprav
 #define ADDRESS_MAIN 0x02
 #define ADDRESS_PC 0x00
 #define ADDRESS_CONTROLLER 0x01
 
 #define ADDRESS_OTHER 0x03
+
+#define AOKERR 0x07
+#define ERR 0x00
+#define AOK 0x80
 
 #define INTERNAL 0x01
 
@@ -18,12 +21,16 @@
 #define INTERNAL_COM_STOP 0x00
 #define INTERNAL_COM_PLAY 0x01
 #define INTERNAL_COM_REC 0x02
+#define INTERNAL_COM_CHECK_NAME 0x03
+#define INTERNAL_COM_GET_SONGS 0x04
+#define INTERNAL_COM_GET_TIME 0x05
+#define INTERNAL_COM_SET_TIME 0x06
 
 #define INTERNAL_DISP 0x01
-
+#define INTERNAL_DISP_SET 0x00
+#define INTERNAL_DISP_GET 0x01
 
 #define INTERNAL_USB 0x02
-
 
 #define INTERNAL_CURR 0x03
 #define INTERNAL_CURR_ON 0x01
@@ -36,6 +43,8 @@
 
 
 #define INTERNAL_CHRG 0x05
+
+#define EXTERNAL_DISP 0x03
 
 
 char decoderBuffer[255];

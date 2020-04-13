@@ -86,12 +86,6 @@ void oled_menuOnclick(int menupos){
 				oled_setDisplayedMenu("bluetoothmenu",&bluetoothmenu, sizeof(bluetoothmenu), 1);
 			break;
 
-			case 1:
-			break;
-
-			case 2:
-			break;
-
 			default:
 				//Vrati se do hlavniho menu
 				oled_setDisplayedMenu("mainmenu",&mainmenu, sizeof(mainmenu), 0);
@@ -201,7 +195,7 @@ void oled_begin(){
 
 	//Zapnou se casovace pro obnovu OLED a scrollovani
 	HAL_TIM_Base_Start_IT(&htim2);
-	HAL_TIM_Base_Start_IT(&htim3);
+
 	oledHeader = (char*)malloc(50);
 }
 
@@ -254,8 +248,10 @@ void oled_drawMenu(){
 	HAL_RTC_GetTime(&hrtc, &time, RTC_FORMAT_BIN);
 	HAL_RTC_GetDate(&hrtc, &date, RTC_FORMAT_BIN);
 
+
 	//Vypise se hlavicka
-	sprintf(oledHeader, "%d.%d %d:%d",date.Date, date.Month, time.Hours, time.Minutes);
+	sprintf(oledHeader, "%d %d %d %d %d", alivePC, aliveMain, btCmdMode, btStreamOpen, workerMiscelaneous.assert);
+	//sprintf(oledHeader, "%d.%d %d:%d  %d %d",date.Date, date.Month, time.Hours, time.Minutes, aliveMain, alivePC);
 	//sprintf(oledHeader, "E: %d N: %s", encoderpos, dispmenu[encoderpos].name);
 	//sprintf(oledHeader, "Disp: %d", HAL_GPIO_ReadPin(DISP_SENSE_GPIO_Port, DISP_SENSE_Pin));
 	//oledHeader = "MIDIControll 0.1";
@@ -263,8 +259,28 @@ void oled_drawMenu(){
 	//sprintf(oledHeader, "E: %d", loadingStat);
 	ssd1306_SetCursor(2,0);
 	ssd1306_WriteString(oledHeader, Font_7x10, White);
-	ssd1306_SetCursor(2,114);
-	ssd1306_WriteChar(' ', Icon_7x10, White);
+
+	if(battStatus < 4){
+		ssd1306_SetCursor(114,0);
+		ssd1306_WriteChar(32+(2*battStatus), Icon_7x10, White);
+		ssd1306_SetCursor(121,0);
+		ssd1306_WriteChar(33+(2*battStatus), Icon_7x10, White);
+	}else{
+		ssd1306_SetCursor(114,0);
+		ssd1306_WriteChar(32+(2*battAnim), Icon_7x10, White);
+		ssd1306_SetCursor(121,0);
+		ssd1306_WriteChar(33+(2*battAnim), Icon_7x10, White);
+	}
+
+
+	if(btDataIcon){
+		ssd1306_SetCursor(93,0);
+		ssd1306_WriteChar(42+6, Icon_7x10, White);
+		ssd1306_SetCursor(100,0);
+		ssd1306_WriteChar(43+6, Icon_7x10, White);
+	}
+
+
 	//for(uint8_t i = 0; i <= 128; i++) ssd1306_DrawPixel(i, 13, White);
 
 

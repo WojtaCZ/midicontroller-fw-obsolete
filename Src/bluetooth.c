@@ -259,12 +259,14 @@ uint8_t bluetoothConnectKnown(){
 		}
 	}
 
+	sprintf(oledHeader, "Neni shoda");
+
 	//Pokud je shoda
 	if(selected != -1){
 		//Okopiruje se MAC adresa
-		char * mac = (char*) malloc(20);
-		sprintf(mac, "%02X%02X%02X%02X%02X%02X", btBonded[match].mac[0], btBonded[match].mac[1], btBonded[match].mac[2], btBonded[match].mac[3], btBonded[match].mac[4], btBonded[match].mac[5]);
-		sprintf(oledHeader, "%s" ,mac);
+		char * mac = (char*) malloc(30);
+		sprintf(mac, "%02X%02X%02X%02X%02X%02X", btBonded[selected].mac[0], btBonded[selected].mac[1], btBonded[selected].mac[2], btBonded[selected].mac[3], btBonded[selected].mac[4], btBonded[selected].mac[5]);
+
 		//Pokusi se pripojit k MAC
 		if(!bluetoothConnect(mac)) return 0;
 	}else return 0;
@@ -286,7 +288,7 @@ uint8_t bluetoothGetScannedDevices(){
 	if(!bluetoothEnterCMD()) return 0;
 
 	//Skenuje 15s
-	if(!bluetoothCMD_Time("F\r", 30, &buff)){
+	if(!bluetoothCMD_Time("F\r", 25, &buff)){
 		if(!bluetoothLeaveCMD()) return 0;
 		return 0;
 	}
@@ -438,7 +440,7 @@ uint8_t bluetoothGetBondableDevices(){
 	if(!bluetoothEnterCMD()) return 0;
 
 	//Skenuje 15s
-	if(!bluetoothCMD_Time("F\r", 30, &buff)){
+	if(!bluetoothCMD_Time("F\r", 15, &buff)){
 		if(!bluetoothLeaveCMD()) return 0;
 		return 0;
 	}
@@ -522,7 +524,7 @@ uint8_t bluetoothConnect(char * mac){
 	char * cmd = (char *) malloc(50);
 	//Vysle prikaz pro pripojeni
 	sprintf(cmd, "C,0,%s\r", mac);
-	sprintf(oledHeader, "%s" ,cmd);
+	//sprintf(oledHeader, "%s" ,cmd);
 	//Pokud se pripojeni nepovedlo, vrati 0
 	if(!bluetoothCMD_ACK(cmd, "%STREAM_OPEN")){
 		//Odejde z CMD modu

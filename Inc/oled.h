@@ -32,7 +32,7 @@ char* dispmenuname;
 void (*splashFunction)(void*);
 void * splashParams;
 
-int scrollIndex, scrollMax, scrollPauseDone, scrollPause, oledType, loadingStat, loadingToggle, refreshHalt;
+int scrollIndex, scrollMax, scrollPauseDone, scrollPause, oledType, loadingStat, loadingToggle, refreshHalt, battAnim;
 
 char *oledHeader;
 

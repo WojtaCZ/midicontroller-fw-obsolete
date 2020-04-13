@@ -133,21 +133,18 @@ int main(void)
 
   bluetoothInit();
 
+  HAL_TIM_Base_Start_IT(&htim3);
+
+
+
   if(bluetoothConnectKnown()){
-	  //bluetoothLeaveCMD();
-	  //bluetoothEnterCMD();
-
-	  /*if(!bluetoothCMD_ACK("I\r", "%STREAM_OPEN")){
-	  		//Odejde z CMD modu
-	  		//bluetoothLeaveCMD();
-	  }*/
-
-	//  bluetoothLeaveCMD();
   	  btStreamOpen = 1;
   	  btCmdMode = 0;
-  	  sprintf(oledHeader, "Conn");
    }
 
+
+
+  midiControl_get_time();
 
   oledType = OLED_MENU;
   /* USER CODE END 2 */
@@ -200,6 +197,14 @@ int main(void)
 	 			oled_setDisplayedSplash(oled_ErrorSplash, "pri nacitani pisni");
 	 			workerGetSongs.assert = 0;
 	 		}
+	 	}
+
+
+	 	if(workerMiscelaneous.assert){
+	 		//Odesle informaci o svoji pritonosti
+	 		char msg[] = {INTERNAL_COM, INTERNAL_COM_KEEPALIVE};
+	 		sendMsg(ADDRESS_CONTROLLER, ADDRESS_OTHER, 1, INTERNAL, msg, 2);
+	 		workerDesert(&workerMiscelaneous);
 	 	}
 
     /* USER CODE END WHILE */
@@ -278,7 +283,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 	}
 
 	if(htim->Instance == TIM1){
-		midiControl_checkKeyboard();
+		midiController_checkKeyboard();
 
 		if(keypad.changed){
 			if(keypad.up){
@@ -348,6 +353,20 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 	if(htim->Instance == TIM3){
 
+		if(loadingStat == 2){
+			workerAssert(&workerMiscelaneous);
+		}
+
+		midiController_keepalive_process();
+
+		if(btData){
+			btDataIcon = 1;
+			btData = 0;
+		}else if(!btData && btDataIcon){
+			btDataIcon = 0;
+		}
+
+
 		//Tady se dela scrollovani
 		if(scrollPauseDone){
 			if(scrollIndex <= scrollMax){
@@ -369,6 +388,10 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		if(loadingStat < 4){
 			loadingStat <<= 1;
 		}else loadingStat = 1;
+
+		if(battAnim < 4){
+			battAnim++;
+		}else battAnim = 0;
 
 		loadingToggle = ~loadingToggle;
 
@@ -455,7 +478,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 }
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart){
-
+	btData = 1;
 }
 
 

@@ -53,9 +53,9 @@ void strToSongMenu(char * str, uint8_t * size){
 void midiController_init(){
 	//Inicializace promennych pro chod zarizeni
 	alivePC = 0;
-	aliveRemote = 0;
+	aliveMain = 0;
 	alivePCCounter = 0;
-	aliveRemoteCounter = 0;
+	aliveMainCounter = 0;
 	workerDesert(&workerBtRemoveController);
 }
 
@@ -142,7 +142,7 @@ void midiController_stop(uint8_t initiator){
 
 }
 
-uint32_t midiControl_checkKeyboard(){
+uint32_t midiController_checkKeyboard(){
 
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, GPIO_PIN_SET);
@@ -217,23 +217,20 @@ uint32_t midiControl_checkKeyboard(){
 midiController_keepalive_process(){
 	//Pricita citace - jak dlouho nedostal odpoved
 	alivePCCounter++;
-	aliveRemoteCounter++;
+	aliveMainCounter++;
 
 	//Pokud nedostal odpoved za 2s, neni PC pripojeno
-	if(alivePCCounter > 4){
+	if(alivePCCounter > 6){
 		alivePC = 0;
 		alivePCCounter = 0;
 	}
 
 	//Pokud nedostal odpoved za 2s, neni ovladac pripojen
-	if(aliveRemoteCounter > 4){
-		aliveRemote = 0;
-		aliveRemoteCounter = 0;
+	if(aliveMainCounter > 6){
+		aliveMain = 0;
+		aliveMainCounter = 0;
 	}
 
-	//Odesle informaci o svoji pritonosti
-	char msg[] = {0x00, 0xAB};
-	sendMsg(ADDRESS_MAIN, ADDRESS_PC, 1, INTERNAL, msg, 2);
 
 }
 
@@ -264,4 +261,10 @@ uint8_t midiController_setDisplay(uint16_t cislo_pisne, uint8_t cislo_sloky, uin
 
 uint8_t midiController_setDisplayRaw(uint8_t * data, uint16_t len){
 
+}
+
+void midiControl_get_time(){
+	//Odesle zadost o nastaveni casu
+	char msg[] = {INTERNAL_COM, INTERNAL_COM_GET_TIME};
+	sendMsg(ADDRESS_CONTROLLER, ADDRESS_PC, 0, INTERNAL, msg, 2);
 }
