@@ -6,6 +6,10 @@
 
 uint32_t keyboardState, keyboardStateOld;
 
+uint32_t adcReadings[2];
+float battVoltage, usbVoltage;
+
+
 signed int keyboardSidePos, keyboardSidePosMax, keyboardVertPos, keyboardVertPosMax, keyboardVertPosOld;
 
 struct menuitem songMenu[100];
@@ -18,6 +22,9 @@ char selectedSong[40];
 #define WORKER_ERR		0x01
 #define WORKER_OK		0x02
 
+struct reqValue numDispSong, numDispVerse, numDispLetter;
+
+
 struct worker{
 	uint8_t assert;
 	uint8_t status;
@@ -26,10 +33,12 @@ struct worker{
 
 uint8_t alivePC, aliveMain, alivePCCounter, aliveMainCounter;
 
-uint8_t btData, btDataIcon, battStatus;
+uint8_t btData, battStatus;
+
+int8_t btDataIcon;
 
 //Flagy pro "workery"
-struct worker workerBtScanDev, workerBtConnect, workerBtBondDev, workerBtEnterPairingKey, workerBtRemoveController, workerGetSongs, workerMiscelaneous;
+struct worker workerBtScanDev, workerBtConnect, workerBtBondDev, workerBtEnterPairingKey, workerBtRemoveController, workerGetSongs, workerMiscelaneous, workerDispRefresh;
 
 char * workerBtConnectMAC;
 

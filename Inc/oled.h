@@ -21,8 +21,6 @@
 
 extern struct menuitem mainmenu[];
 
-
-
 //Inicializuje se menu o 50 prvcích
 struct menuitem dispmenu[50];
 int dispmenusize;
@@ -31,6 +29,27 @@ char* dispmenuname;
 
 void (*splashFunction)(void*);
 void * splashParams;
+
+#define APP_DISPLAY		0
+
+struct reqNumber{
+	uint8_t application;
+	uint8_t digits;
+	uint8_t selectedDigit;
+	long int enteredNumber;
+	char * message;
+};
+
+struct reqValue{
+	uint8_t application;
+	uint8_t digits;
+	uint8_t selectedDigit;
+	char enteredValue[30];
+	char * message;
+	char * characters;
+	uint8_t charactersLen;
+};
+
 
 int scrollIndex, scrollMax, scrollPauseDone, scrollPause, oledType, loadingStat, loadingToggle, refreshHalt, battAnim;
 

@@ -121,11 +121,46 @@ int main(void)
   MX_TIM3_Init();
   MX_USART2_UART_Init();
   MX_TIM6_Init();
+  MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
 
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);
 
   HAL_RTC_Init(&hrtc);
+
+  uint8_t add = 0x6B;
+
+ /* uint8_t bytes[] = {0x36, 0x1F, 0x80, 0x11, 0xb2, 0x0A, 0x03, 0x4B};
+  HAL_I2C_Mem_Write(&hi2c1, (add<<1), 0x00, 1, &bytes[0], 1, HAL_MAX_DELAY);
+  HAL_I2C_Mem_Write(&hi2c1, (add<<1), 0x01, 1, &bytes[1], 1, HAL_MAX_DELAY);
+  HAL_I2C_Mem_Write(&hi2c1, (add<<1), 0x02, 1, &bytes[2], 1, HAL_MAX_DELAY);
+  HAL_I2C_Mem_Write(&hi2c1, (add<<1), 0x03, 1, &bytes[3], 1, HAL_MAX_DELAY);
+  HAL_I2C_Mem_Write(&hi2c1, (add<<1), 0x04, 1, &bytes[4], 1, HAL_MAX_DELAY);
+  HAL_I2C_Mem_Write(&hi2c1, (add<<1), 0x05, 1, &bytes[5], 1, HAL_MAX_DELAY);
+  HAL_I2C_Mem_Write(&hi2c1, (add<<1), 0x06, 1, &bytes[6], 1, HAL_MAX_DELAY);
+  HAL_I2C_Mem_Write(&hi2c1, (add<<1), 0x07, 1, &bytes[7], 1, HAL_MAX_DELAY);*/
+
+  /*HAL_I2C_Mem_Read(&hi2c1, (add<<1), 0x00, 1, &buf[0], 1, HAL_MAX_DELAY);
+
+  HAL_I2C_Mem_Read(&hi2c1, (add<<1), 0x01, 1, &buf[1], 1, HAL_MAX_DELAY);
+
+  HAL_I2C_Mem_Read(&hi2c1, (add<<1), 0x02, 1, &buf[2], 1, HAL_MAX_DELAY);
+
+  HAL_I2C_Mem_Read(&hi2c1, (add<<1), 0x03, 1, &buf[3], 1, HAL_MAX_DELAY);
+
+  HAL_I2C_Mem_Read(&hi2c1, (add<<1), 0x04, 1, &buf[4], 1, HAL_MAX_DELAY);
+
+    HAL_I2C_Mem_Read(&hi2c1, (add<<1), 0x05, 1, &buf[5], 1, HAL_MAX_DELAY);
+
+    HAL_I2C_Mem_Read(&hi2c1, (add<<1), 0x06, 1, &buf[6], 1, HAL_MAX_DELAY);
+
+      HAL_I2C_Mem_Read(&hi2c1, (add<<1), 0x07, 1, &buf[7], 1, HAL_MAX_DELAY);
+
+      HAL_I2C_Mem_Read(&hi2c1, (add<<1), 0x08, 1, &buf[8], 1, HAL_MAX_DELAY);
+
+      HAL_I2C_Mem_Read(&hi2c1, (add<<1), 0x09, 1, &buf[9], 1, HAL_MAX_DELAY);*/
+
+
 
   oled_begin();
 
@@ -134,14 +169,15 @@ int main(void)
   bluetoothInit();
 
   HAL_TIM_Base_Start_IT(&htim3);
+  HAL_TIM_Base_Start_IT(&htim7);
 
+  HAL_ADC_Start(&hadc1);
 
-
-  if(bluetoothConnectKnown()){
+  /*if(bluetoothConnectKnown()){
   	  btStreamOpen = 1;
   	  btCmdMode = 0;
    }
-
+*/
 
 
   midiControl_get_time();
@@ -173,6 +209,15 @@ int main(void)
 	 		  btMsgReceivedFlag = 0;
 	 	  }
 
+		  if(workerBtRemoveController.assert){
+		  		if(!btCmdMode) bluetoothEnterCMD();
+		  		char cmd[10];
+		  		sprintf(cmd,"U,%d\r", (btSelectedController+1));
+		  		bluetoothCMD_ACK(cmd, BT_AOK);
+		  		if(btCmdMode) bluetoothLeaveCMD();
+		  		workerBtRemoveController.assert = 0;
+		  }
+
 	 	  if(workerBtEnterPairingKey.assert){
 	 		  if(!btCmdMode) bluetoothEnterCMD();
 	 		  char pin[10];
@@ -201,12 +246,64 @@ int main(void)
 
 
 	 	if(workerMiscelaneous.assert){
+	 		HAL_ADC_PollForConversion (&hadc1, 1000);
+	 		battVoltage = (HAL_ADC_GetValue(&hadc1) * 0.000805664);
 	 		//Odesle informaci o svoji pritonosti
 	 		char msg[] = {INTERNAL_COM, INTERNAL_COM_KEEPALIVE};
 	 		sendMsg(ADDRESS_CONTROLLER, ADDRESS_OTHER, 1, INTERNAL, msg, 2);
 	 		workerDesert(&workerMiscelaneous);
 	 	}
 
+
+	 	if(workerDispRefresh.assert){
+	 		char buff[20];
+	 		uint8_t changed = 0;
+
+	 		//Pokud se lisi nastavene a existujici cislo pisne
+	 		sprintf(buff, "%c%c%c%c", dispSong[3], dispSong[2], dispSong[1], dispSong[0]);
+	 		if(strcmp(numDispSong.enteredValue,buff)){
+	 			dispSong[3] = numDispSong.enteredValue[0];
+	 			dispSong[2] = numDispSong.enteredValue[1];
+	 			dispSong[1] = numDispSong.enteredValue[2];
+	 			dispSong[0] = numDispSong.enteredValue[3];
+
+	 		}
+
+	 		//Pokud se lisi nastavene a existujici cislo sloky
+	 		sprintf(buff, "%c%c%", dispVerse[1], dispVerse[0]);
+	 		if(strcmp(numDispSong.enteredValue,buff)){
+	 			dispVerse[1] = numDispVerse.enteredValue[0];
+	 			dispVerse[0] = numDispVerse.enteredValue[1];
+
+	 		}
+
+	 		//Pokud se lisi nastavene a existujici pismeno
+	 		if(numDispLetter.enteredValue[0] != dispLetter){
+	 			dispLetter = numDispLetter.enteredValue[0];
+	 			changed = 1;
+	 		}
+
+	 		if(dispLED != dispLEDOld){
+	 			changed = 1;
+	 		}
+
+	 		if(changed){
+	 			uint8_t data[9];
+	 			data[0] = 0xB0;
+	 			data[1] =  (dispVerse[0] <= '9' && dispVerse[0] >= '0') ? dispVerse[0]-48 : 0xE0;
+	 			data[2] =  (dispVerse[1] <= '9' && dispVerse[1] >= '0') ? dispVerse[1]-48 : 0xE0;
+	 			data[3] =  (dispSong[0] <= '9' && dispSong[0] >= '0') ? dispSong[0]-48 : 0xE0;
+	 			data[4] =  (dispSong[1] <= '9' && dispSong[1] >= '0') ? dispSong[1]-48 : 0xE0;
+	 			data[5] =  (dispSong[2] <= '9' && dispSong[2] >= '0') ? dispSong[2]-48 : 0xE0;
+	 			data[6] =  (dispSong[3] <= '9' && dispSong[3] >= '0') ? dispSong[3]-48 : 0xE0;
+	 			data[7] =  (dispLetter <= 'D' && dispLetter >= 'A') ? dispLetter-55 : 0xE0;
+	 			data[8] =	 (dispLED <= 3 && dispLetter >= 0) ? 0x20 | dispLED : 0xE0;
+	 			midiControl_setDisplayRaw(data, 9);
+	 			changed = 0;
+	 		}
+
+	 		workerDesert(&workerDispRefresh);
+	 	}
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -359,13 +456,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 
 		midiController_keepalive_process();
 
-		if(btData){
-			btDataIcon = 1;
-			btData = 0;
-		}else if(!btData && btDataIcon){
-			btDataIcon = 0;
-		}
-
 
 		//Tady se dela scrollovani
 		if(scrollPauseDone){
@@ -405,6 +495,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 			}
 		}else btStatusMsgWD = 0;
 
+		HAL_I2C_Mem_Read(&hi2c1, (0x6B<<1), 0x08, 1, &buf[8], 1, HAL_MAX_DELAY);
+
 	}
 
 	if(htim->Instance == TIM6){
@@ -423,6 +515,19 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 		HAL_NVIC_EnableIRQ(TIM6_DAC_LPTIM1_IRQn);
 	}
 
+	if(htim->Instance == TIM7){
+		if(btData && btDataIcon == -1){
+			btDataIcon = 0;
+		}
+
+		if(btDataIcon != -1 && btDataIcon < 3){
+			btDataIcon++;
+		}else if(btDataIcon != -1){
+			btDataIcon = -1;
+			btData = 0;
+		}
+	}
+
 }
 
 void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
@@ -437,49 +542,53 @@ void HAL_GPIO_EXTI_Falling_Callback(uint16_t GPIO_Pin)
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 
 	if(huart->Instance == USART2){
-			//Pokud dostal status message od modulu
-			if((btFifoByte == '%' || btStatusMsg) && !btCmdMode){
-				if(btFifoByte == '%') btStatusMsg = ~btStatusMsg;
-				if(btFifoByte == '%' && !btStatusMsg) bluetoothDecodeMsg();
-				btMsgFifo[btMsgFifoIndex++] = btFifoByte;
-			}else if(!btStatusMsg){
+		//Pokud dostal status message od modulu
+				if((btFifoByte == '%' || btStatusMsg) && !btCmdMode){
+					if(btFifoByte == '%') btStatusMsg = ~btStatusMsg;
+					if(btFifoByte == '%' && !btStatusMsg) bluetoothDecodeMsg();
+					btMsgFifo[btMsgFifoIndex++] = btFifoByte;
+				}else if(!btStatusMsg){
 
-				if(!btCmdMode && btFifoByte == 0 && btNullCounter < 4 && btComMessageSizeFlag < 2){
-					//Odpocitaji se 4 nully
-					btNullCounter++;
-				}else if(btNullCounter == 4 && btComMessageSizeFlag < 2){
-					btMsgReceivedFlag = 0;
-					//Odpocita se velikost
-					btComMessageSizeFlag++;
-					btMessageLen = 0;
-				}else if(btNullCounter == 4 && btComMessageSizeFlag == 2 && btMessageLen == 0){
-					//Zapise se index zacatku zpravy
-					btComMessageStartIndex = btFifoIndex-6;
+					if(!btCmdMode && btFifoByte == 0 && btNullCounter < 4 && btComMessageSizeFlag < 2){
+						//Odpocitaji se 4 nully
+						btNullCounter++;
+					}else if(btNullCounter == 4 && btComMessageSizeFlag < 2){
+						btMsgReceivedFlag = 0;
+						//Odpocita se velikost
+						btComMessageSizeFlag++;
+						btMessageLen = 0;
+					}else if(btNullCounter == 4 && btComMessageSizeFlag == 2 && btMessageLen == 0){
+						//Zapise se index zacatku zpravy
+						btComMessageStartIndex = btFifoIndex-6;
 
-					btMessageLen = ((btFifo[btComMessageStartIndex+4] << 8) & 0xff00) | (btFifo[btComMessageStartIndex+5] & 0xff);
+						btMessageLen = ((btFifo[btComMessageStartIndex+4] << 8) & 0xff00) | (btFifo[btComMessageStartIndex+5] & 0xff);
+
+					}
+
+					btFifo[btFifoIndex++] = btFifoByte;
+
+					if(btMessageLen > 0 && (btFifoIndex) >= btMessageLen+btComMessageStartIndex+6 && btNullCounter == 4 && btComMessageSizeFlag == 2){
+
+						memcpy(uartMsgDecodeBuff, btFifo+btComMessageStartIndex, btMessageLen+6);
+						btMsgReceivedFlag = 1;
+						bluetoothFifoFlush();
+						btNullCounter = 0;
+						btComMessageSizeFlag = 0;
+					}
 
 				}
 
-				btFifo[btFifoIndex++] = btFifoByte;
-
-				if(btMessageLen > 0 && (btFifoIndex) >= btMessageLen+btComMessageStartIndex+6 && btNullCounter == 4 && btComMessageSizeFlag == 2){
-
-					memcpy(uartMsgDecodeBuff, btFifo+btComMessageStartIndex, btMessageLen+6);
-					btMsgReceivedFlag = 1;
-					bluetoothFifoFlush();
-					btNullCounter = 0;
-					btComMessageSizeFlag = 0;
-				}
-
-			}
-
-			HAL_UART_Receive_IT(&huart2, &btFifoByte, 1);
+				HAL_UART_Receive_IT(&huart2, &btFifoByte, 1);
 	}
 }
 
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart){
-	btData = 1;
+
 }
+
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
+}
+
 
 
 /* USER CODE END 4 */

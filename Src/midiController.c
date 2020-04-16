@@ -56,6 +56,7 @@ void midiController_init(){
 	aliveMain = 0;
 	alivePCCounter = 0;
 	aliveMainCounter = 0;
+	btDataIcon = -1;
 	workerDesert(&workerBtRemoveController);
 }
 

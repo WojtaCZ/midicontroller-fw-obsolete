@@ -12,7 +12,7 @@ extern struct menuitem bluetoothmenu[];
 #define BT_AOK "AOK"
 #define BT_END "END\r"
 
-#define BT_TIMEOUT 2000
+#define BT_TIMEOUT 6000
 
 
 uint16_t btFifoIndex, btMsgFifoIndex, btComMessageStartIndex, btMessageLen, btStatusMsgWD;

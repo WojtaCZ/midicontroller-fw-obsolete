@@ -114,6 +114,7 @@ void sendMsg(uint8_t src, uint8_t dest, uint8_t broadcast, uint8_t type, char * 
 
 	if(btStreamOpen && !btCmdMode){
 		HAL_UART_Transmit_IT(&huart2, buffer, len+7);
+		btData = 1;
 	}
 
 }

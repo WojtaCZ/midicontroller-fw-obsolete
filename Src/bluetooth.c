@@ -39,11 +39,12 @@ uint8_t bluetoothInit(){
 	HAL_Delay(100);
 
 	//Zapne se CMD
+	btCmdMode = 0;
 	if(!bluetoothEnterCMD()) return 0;
 
 	//Dev info a UART
-	if(!bluetoothCMD_ACK("GS\r", "C0")){
-		if(!bluetoothCMD_ACK("SS,C0\r", BT_AOK)) return 0;
+	if(!bluetoothCMD_ACK("GS\r", "E0")){
+		if(!bluetoothCMD_ACK("SS,E0\r", BT_AOK)) return 0;
 		if(!bluetoothCMD_ACK("R,1\r", "REBOOT")) return 0;
 	}
 
@@ -63,11 +64,10 @@ uint8_t bluetoothInit(){
 	if(!bluetoothCMD_ACK("SDN,Vojtech Vosahlo\r", BT_AOK)) return 0;
 
 	//Automaticky potvrdi pin
-	if(!bluetoothCMD_ACK("SA,5\r", BT_AOK)) return 0;
+	if(!bluetoothCMD_ACK("SA,4\r", BT_AOK)) return 0;
 
 	//Vypne CMD
 	if(!bluetoothLeaveCMD()) return 0;
-
 
 	return 1;
 }
@@ -77,17 +77,20 @@ uint8_t bluetoothDecodeMsg(){
 	char * index = 0;
 	if(strstr((char *)btMsgFifo, "%BONDED") != 0){
 		btStreamOpen = 1;
+		btCmdMode = 0;
 	}
 
 	if(strstr((char *)btMsgFifo, "%CONNECT") != 0){
 		index = strstr((char *)btMsgFifo, "%CONNECT");
 		sscanf((char *)index+9, "%*d,%02X%02X%02X%02X%02X%02X", &btPairReq.mac[0], &btPairReq.mac[1], &btPairReq.mac[2], &btPairReq.mac[3], &btPairReq.mac[4], &btPairReq.mac[5]);
 		sprintf(btPairReq.name, "%02X-%02X-%02X-%02X-%02X-%02X", btPairReq.mac[0], btPairReq.mac[1], btPairReq.mac[2], btPairReq.mac[3], btPairReq.mac[4], btPairReq.mac[5]);
+		btCmdMode = 0;
 	}
 
 	if(strstr((char *)btMsgFifo, "%DISCONNECT") != 0){
 		oledType = OLED_MENU;
 		btStreamOpen = 0;
+		btCmdMode = 0;
 	}
 
 	if(strstr((char *)btMsgFifo, "%KEY:") != 0){
@@ -99,10 +102,12 @@ uint8_t bluetoothDecodeMsg(){
 
 	if(strstr((char *)btMsgFifo, "%STREAM_OPEN") != 0){
 		btStreamOpen = 1;
+		btCmdMode = 0;
 	}
 
 	if(strstr((char *)btMsgFifo, "%SECURED") != 0){
 		btStreamOpen = 1;
+		btCmdMode = 0;
 	}
 
 	if(strstr((char *)btMsgFifo, "%KEY_REQ") != 0){
@@ -136,14 +141,16 @@ void bluetoothMsgFifoFlush(){
 
 //Zapnuti CMD modu modulu
 uint8_t bluetoothEnterCMD(){
-	if(!bluetoothCMD_ACK("$$$", "CMD>")) return 0;
+	if(btCmdMode) return 1;
+	if(!bluetoothCMD_ACK("$$$", "CMD>"));
 	btCmdMode = 1;
 	return 1;
 }
 
 //Vypnuti CMD modu modulu
 uint8_t bluetoothLeaveCMD(){
-	if(!bluetoothCMD_ACK("---\r", BT_END)) return 0;
+	if(!btCmdMode) return 1;
+	if(!bluetoothCMD_ACK("---\r", BT_END));
 	btCmdMode = 0;
 	return 1;
 }
@@ -259,23 +266,23 @@ uint8_t bluetoothConnectKnown(){
 		}
 	}
 
-	sprintf(oledHeader, "Neni shoda");
-
 	//Pokud je shoda
 	if(selected != -1){
 		//Okopiruje se MAC adresa
-		char * mac = (char*) malloc(30);
+		char * mac = (char*) malloc(20);
 		sprintf(mac, "%02X%02X%02X%02X%02X%02X", btBonded[selected].mac[0], btBonded[selected].mac[1], btBonded[selected].mac[2], btBonded[selected].mac[3], btBonded[selected].mac[4], btBonded[selected].mac[5]);
-
 		//Pokusi se pripojit k MAC
 		if(!bluetoothConnect(mac)) return 0;
-	}else return 0;
+	}else{
+		if(!bluetoothConnect("D88039FFF0B0")) return 0;
+	}
 
 	//Odejde z CMD modu
 	bluetoothLeaveCMD();
 
 	return 1;
 }
+
 
 
 //Rutina pro oskenovani zarizeni v okoli a vytvoreni menu
