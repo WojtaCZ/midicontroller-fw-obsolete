@@ -61,7 +61,7 @@
 
 uint16_t midiFifoIndex;
 uint8_t midiFifo[500], uartMsgDecodeBuff[300];
-
+extern struct menuitem mainmenu[5];
 
 unsigned int sw = 0;
 uint8_t c, cycles = 0 ;
@@ -124,43 +124,11 @@ int main(void)
   MX_TIM7_Init();
   /* USER CODE BEGIN 2 */
 
+  midiController_init();
+
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_SET);
 
   HAL_RTC_Init(&hrtc);
-
-  uint8_t add = 0x6B;
-
- /* uint8_t bytes[] = {0x36, 0x1F, 0x80, 0x11, 0xb2, 0x0A, 0x03, 0x4B};
-  HAL_I2C_Mem_Write(&hi2c1, (add<<1), 0x00, 1, &bytes[0], 1, HAL_MAX_DELAY);
-  HAL_I2C_Mem_Write(&hi2c1, (add<<1), 0x01, 1, &bytes[1], 1, HAL_MAX_DELAY);
-  HAL_I2C_Mem_Write(&hi2c1, (add<<1), 0x02, 1, &bytes[2], 1, HAL_MAX_DELAY);
-  HAL_I2C_Mem_Write(&hi2c1, (add<<1), 0x03, 1, &bytes[3], 1, HAL_MAX_DELAY);
-  HAL_I2C_Mem_Write(&hi2c1, (add<<1), 0x04, 1, &bytes[4], 1, HAL_MAX_DELAY);
-  HAL_I2C_Mem_Write(&hi2c1, (add<<1), 0x05, 1, &bytes[5], 1, HAL_MAX_DELAY);
-  HAL_I2C_Mem_Write(&hi2c1, (add<<1), 0x06, 1, &bytes[6], 1, HAL_MAX_DELAY);
-  HAL_I2C_Mem_Write(&hi2c1, (add<<1), 0x07, 1, &bytes[7], 1, HAL_MAX_DELAY);*/
-
-  /*HAL_I2C_Mem_Read(&hi2c1, (add<<1), 0x00, 1, &buf[0], 1, HAL_MAX_DELAY);
-
-  HAL_I2C_Mem_Read(&hi2c1, (add<<1), 0x01, 1, &buf[1], 1, HAL_MAX_DELAY);
-
-  HAL_I2C_Mem_Read(&hi2c1, (add<<1), 0x02, 1, &buf[2], 1, HAL_MAX_DELAY);
-
-  HAL_I2C_Mem_Read(&hi2c1, (add<<1), 0x03, 1, &buf[3], 1, HAL_MAX_DELAY);
-
-  HAL_I2C_Mem_Read(&hi2c1, (add<<1), 0x04, 1, &buf[4], 1, HAL_MAX_DELAY);
-
-    HAL_I2C_Mem_Read(&hi2c1, (add<<1), 0x05, 1, &buf[5], 1, HAL_MAX_DELAY);
-
-    HAL_I2C_Mem_Read(&hi2c1, (add<<1), 0x06, 1, &buf[6], 1, HAL_MAX_DELAY);
-
-      HAL_I2C_Mem_Read(&hi2c1, (add<<1), 0x07, 1, &buf[7], 1, HAL_MAX_DELAY);
-
-      HAL_I2C_Mem_Read(&hi2c1, (add<<1), 0x08, 1, &buf[8], 1, HAL_MAX_DELAY);
-
-      HAL_I2C_Mem_Read(&hi2c1, (add<<1), 0x09, 1, &buf[9], 1, HAL_MAX_DELAY);*/
-
-
 
   oled_begin();
 
@@ -173,14 +141,15 @@ int main(void)
 
   HAL_ADC_Start(&hadc1);
 
-  /*if(bluetoothConnectKnown()){
+  if(bluetoothConnectKnown()){
   	  btStreamOpen = 1;
   	  btCmdMode = 0;
    }
-*/
 
 
-  midiControl_get_time();
+  HAL_Delay(2000);
+
+  midiController_get_time();
 
   oledType = OLED_MENU;
   /* USER CODE END 2 */
@@ -190,22 +159,23 @@ int main(void)
   while (1)
   {
 
-	  //Pokud byl request na skenovani
-	 	  if(workerBtScanDev.assert){
-	 		 bluetoothGetScannedDevices();
-	 		 oled_setDisplayedMenu("btScanedDevices", &btScanedDevices, sizeof(btScanedDevices)-(20-btScannedCount-1)*sizeof(btScanedDevices[19]), 0);
-	 		 workerDesert(&workerBtScanDev);
+		  //Pokud byl request na skenovani
+		  if(workerBtScanDev.assert){
+			 if(bluetoothGetScannedDevices()){
+				 oled_setDisplayedMenu("btScanedDevices", &btScanedDevices, sizeof(btScanedDevices)-(20-btScannedCount-1)*sizeof(btScanedDevices[19]), 0);
+			 }else oled_setDisplayedSplash(oled_NothingFound, NULL);
+			 workerBtScanDev.assert = 0;
+		  }
 
-	 	  }
-
-	 	  if(workerBtBondDev.assert){
-	 		 bluetoothGetBondedDevices();
-	 		 oled_setDisplayedMenu("btBondedDevicesMenu", &btBondedDevicesMenu, sizeof(btBondedDevicesMenu)-(10-btBondedCount-1)*sizeof(btBondedDevicesMenu[9]), 0);
-	 		 workerDesert(&workerBtBondDev);
-	 	  }
+		  if(workerBtBondDev.assert){
+			 if(bluetoothGetBondedDevices()){
+				 oled_setDisplayedMenu("btBondedDevicesMenu", &btBondedDevicesMenu, sizeof(btBondedDevicesMenu)-(10-btBondedCount-1)*sizeof(btBondedDevicesMenu[9]), 0);
+			 }else oled_setDisplayedSplash(oled_NothingFound, NULL);
+			 workerBtBondDev.assert = 0;
+		  }
 
 	 	  if(btMsgReceivedFlag){
-	 		  decodeMessage(uartMsgDecodeBuff, btMessageLen+6, ((uartMsgDecodeBuff[6] & 0x04) >> 2));
+	 		  decodeMessage(uartMsgDecodeBuff, ((uartMsgDecodeBuff[6] & 0x04) >> 2));
 	 		  btMsgReceivedFlag = 0;
 	 	  }
 
@@ -215,6 +185,7 @@ int main(void)
 		  		sprintf(cmd,"U,%d\r", (btSelectedController+1));
 		  		bluetoothCMD_ACK(cmd, BT_AOK);
 		  		if(btCmdMode) bluetoothLeaveCMD();
+		  		oled_setDisplayedMenu("mainmenu",&mainmenu, sizeof(mainmenu), 0);
 		  		workerBtRemoveController.assert = 0;
 		  }
 
@@ -270,7 +241,7 @@ int main(void)
 	 		}
 
 	 		//Pokud se lisi nastavene a existujici cislo sloky
-	 		sprintf(buff, "%c%c%", dispVerse[1], dispVerse[0]);
+	 		sprintf(buff, "%c%c", dispVerse[1], dispVerse[0]);
 	 		if(strcmp(numDispSong.enteredValue,buff)){
 	 			dispVerse[1] = numDispVerse.enteredValue[0];
 	 			dispVerse[0] = numDispVerse.enteredValue[1];
@@ -285,6 +256,7 @@ int main(void)
 
 	 		if(dispLED != dispLEDOld){
 	 			changed = 1;
+	 			dispLEDOld = dispLED;
 	 		}
 
 	 		if(changed){
@@ -297,8 +269,8 @@ int main(void)
 	 			data[5] =  (dispSong[2] <= '9' && dispSong[2] >= '0') ? dispSong[2]-48 : 0xE0;
 	 			data[6] =  (dispSong[3] <= '9' && dispSong[3] >= '0') ? dispSong[3]-48 : 0xE0;
 	 			data[7] =  (dispLetter <= 'D' && dispLetter >= 'A') ? dispLetter-55 : 0xE0;
-	 			data[8] =	 (dispLED <= 3 && dispLetter >= 0) ? 0x20 | dispLED : 0xE0;
-	 			midiControl_setDisplayRaw(data, 9);
+	 			data[8] =  (dispLED <= 3 && dispLetter >= 0) ? 0x20 | dispLED : 0xE0;
+	 			midiController_setDisplayRaw(data, 9);
 	 			changed = 0;
 	 		}
 

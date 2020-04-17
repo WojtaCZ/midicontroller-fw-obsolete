@@ -57,6 +57,15 @@ void midiController_init(){
 	alivePCCounter = 0;
 	aliveMainCounter = 0;
 	btDataIcon = -1;
+	dispSong[0] = '-';
+	dispSong[1] = '-';
+	dispSong[2] = '-';
+	dispSong[3] = '-';
+	dispVerse[0] = '-';
+	dispVerse[1] = '-';
+	dispLetter = '-';
+	dispLED = DISP_LED_CLEAR;
+	dispLEDOld = 0;
 	workerDesert(&workerBtRemoveController);
 }
 
@@ -67,18 +76,20 @@ void midiController_display_getState(){
 
 //Rutina pro zapnuti proudoveho zdroje
 void midiController_current_On(){
-	char msg[2];
+	char msg[3];
 	msg[0] = INTERNAL_CURR;
-	msg[1] = INTERNAL_CURR_ON;
-	sendMsg(ADDRESS_CONTROLLER, ADDRESS_MAIN, 0, INTERNAL, msg, 2);
+	msg[1] = INTERNAL_CURR_SET_STATUS;
+	msg[2] = 1;
+	sendMsg(ADDRESS_CONTROLLER, ADDRESS_MAIN, 0, INTERNAL, msg, 3);
 }
 
 //Rutina pro vypnuti proudoveho zdroje
 void midiController_current_Off(){
-	char msg[2];
+	char msg[3];
 	msg[0] = INTERNAL_CURR;
-	msg[1] = INTERNAL_CURR_OFF;
-	sendMsg(ADDRESS_CONTROLLER, ADDRESS_MAIN, 0, INTERNAL, msg, 2);
+	msg[1] = INTERNAL_CURR_SET_STATUS;
+	msg[2] = 0;
+	sendMsg(ADDRESS_CONTROLLER, ADDRESS_MAIN, 0, INTERNAL, msg, 3);
 }
 
 
@@ -86,6 +97,8 @@ void midiController_current_Off(){
 void midiController_record(uint8_t initiator, char * songname){
 	//Spusteno z PC
 	if(initiator == ADDRESS_PC){
+		memset(selectedSong, 0, 40);
+		sprintf(selectedSong, "%s", songname);
 		//Jen se zobrazi obrazovka nahravani
 		oled_setDisplayedSplash(oled_recordingSplash, songname);
 	}else if(initiator == ADDRESS_CONTROLLER){
@@ -99,7 +112,7 @@ void midiController_record(uint8_t initiator, char * songname){
 		msg[0] = INTERNAL_COM;
 		msg[1] = INTERNAL_COM_REC;
 		memcpy(&msg[2], songname, strlen(songname));
-		sendMsg(ADDRESS_MAIN, ADDRESS_PC, 0, INTERNAL, msg, strlen(songname)+2);
+		sendMsg(ADDRESS_CONTROLLER, ADDRESS_PC, 0, INTERNAL, msg, strlen(songname)+2);
 	}
 
 
@@ -123,7 +136,7 @@ void midiController_play(uint8_t initiator, char * songname){
 		msg[0] = INTERNAL_COM;
 		msg[1] = INTERNAL_COM_PLAY;
 		memcpy(&msg[2], songname, strlen(songname));
-		sendMsg(ADDRESS_MAIN, ADDRESS_PC, 0, INTERNAL, msg, strlen(songname)+2);
+		sendMsg(ADDRESS_CONTROLLER, ADDRESS_PC, 0, INTERNAL, msg, strlen(songname)+2);
 	}
 
 
@@ -131,10 +144,10 @@ void midiController_play(uint8_t initiator, char * songname){
 
 void midiController_stop(uint8_t initiator){
 	//Spusteno z hlavni jednotky
-	if(initiator == ADDRESS_MAIN){
+	if(initiator == ADDRESS_CONTROLLER){
 		//Posle se zprava do PC o zastaveni
 		char msg[2] = {INTERNAL_COM, INTERNAL_COM_STOP};
-		sendMsg(ADDRESS_MAIN, ADDRESS_PC, 0, INTERNAL, msg, 2);
+		sendMsg(ADDRESS_CONTROLLER, ADDRESS_MAIN, 0, INTERNAL, msg, 2);
 	}else{
 		//Vrati se do menu, zapne OLED refresh a vypne LED
 		oledType = OLED_MENU;
@@ -261,10 +274,10 @@ uint8_t midiController_setDisplay(uint16_t cislo_pisne, uint8_t cislo_sloky, uin
 }
 
 uint8_t midiController_setDisplayRaw(uint8_t * data, uint16_t len){
-
+	sendMsg(ADDRESS_CONTROLLER, ADDRESS_MAIN, 0, EXTERNAL_DISP, data, len);
 }
 
-void midiControl_get_time(){
+void midiController_get_time(){
 	//Odesle zadost o nastaveni casu
 	char msg[] = {INTERNAL_COM, INTERNAL_COM_GET_TIME};
 	sendMsg(ADDRESS_CONTROLLER, ADDRESS_PC, 0, INTERNAL, msg, 2);

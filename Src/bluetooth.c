@@ -10,9 +10,6 @@
 
 extern uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len);
 
-//ZADOST PRIPOJENI
-//AOK{0D}{0A}CMD> %CONNECT,1,699238C2F7D5%%KEY:123456%%CONN_PARAM,0006,0000,01F4%1,699238C2F7D5,1{0D}{0A}END
-
 uint8_t bluetoothInit(){
 	btFifoIndex = 0;
 	btMsgFifoIndex = 0;
@@ -27,6 +24,15 @@ uint8_t bluetoothInit(){
 	workerDesert(&workerBtEnterPairingKey);
 	workerDesert(&workerBtBondDev);
 	workerDesert(&workerBtScanDev);
+
+	btModule.mac[0] = 0xD8;
+	btModule.mac[1] = 0x80;
+	btModule.mac[2] = 0x39;
+	btModule.mac[3] = 0xFE;
+	btModule.mac[4] = 0x59;
+	btModule.mac[5] = 0x96;
+	sprintf(btModule.name, "MIDIController");
+	btModule.rssi = 0;
 
 	//Zecne se prijem
 	HAL_UART_Receive_IT(&huart2, &btFifoByte, 1);
@@ -64,7 +70,7 @@ uint8_t bluetoothInit(){
 	if(!bluetoothCMD_ACK("SDN,Vojtech Vosahlo\r", BT_AOK)) return 0;
 
 	//Automaticky potvrdi pin
-	if(!bluetoothCMD_ACK("SA,4\r", BT_AOK)) return 0;
+	if(!bluetoothCMD_ACK("SA,3\r", BT_AOK)) return 0;
 
 	//Vypne CMD
 	if(!bluetoothLeaveCMD()) return 0;
@@ -272,7 +278,9 @@ uint8_t bluetoothConnectKnown(){
 		char * mac = (char*) malloc(20);
 		sprintf(mac, "%02X%02X%02X%02X%02X%02X", btBonded[selected].mac[0], btBonded[selected].mac[1], btBonded[selected].mac[2], btBonded[selected].mac[3], btBonded[selected].mac[4], btBonded[selected].mac[5]);
 		//Pokusi se pripojit k MAC
-		if(!bluetoothConnect(mac)) return 0;
+		if(!bluetoothConnect(mac)){
+			if(!bluetoothConnect("D88039FFF0B0")) return 0;
+		}
 	}else{
 		if(!bluetoothConnect("D88039FFF0B0")) return 0;
 	}
@@ -295,7 +303,7 @@ uint8_t bluetoothGetScannedDevices(){
 	if(!bluetoothEnterCMD()) return 0;
 
 	//Skenuje 15s
-	if(!bluetoothCMD_Time("F\r", 25, &buff)){
+	if(!bluetoothCMD_Time("F\r", 15, &buff)){
 		if(!bluetoothLeaveCMD()) return 0;
 		return 0;
 	}

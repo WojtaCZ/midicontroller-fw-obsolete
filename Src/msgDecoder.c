@@ -8,16 +8,19 @@
 
 extern uint8_t CDC_Transmit_FS(uint8_t* Buf, uint16_t Len);
 
-void decodeMessage(char * msg, uint16_t len, uint8_t broadcast){
+void decodeMessage(char * msg, uint8_t broadcast){
 
 	btData = 1;
 
 	//Internal
 	char msgType = msg[6];
 
-	uint8_t src = ((msg[6] & 0x18) >> 3);
+	uint16_t len = (msg[4]<<8 | msg[5]);
 
-	if((msgType & 0xE0) == 0x20){
+	uint8_t src = ((msg[6] & 0x18) >> 3);
+	uint8_t type = ((msgType & 0xE0) >> 5);
+
+	if(type = INTERNAL){
 		if(msg[7] == INTERNAL_COM){
 			if(msg[8] == INTERNAL_COM_PLAY){
 				midiController_play(src, &msg[9]);
@@ -62,16 +65,31 @@ void decodeMessage(char * msg, uint16_t len, uint8_t broadcast){
 				HAL_RTC_SetDate(&hrtc, &date, RTC_FORMAT_BIN);
 
 			}else msgERR(0, msgType, len);
-		}else if(msg[7] == INTERNAL_CURR){
-			if(msg[8] == INTERNAL_CURR_ON){
-				//midiControl_current_On();
-				msgAOK(0, msgType, len, 0, NULL);
-			}else if(msg[8] == INTERNAL_CURR_OFF){
-				//midiControl_current_Off();
-				msgAOK(0, msgType, len, 0, NULL);
-			}else msgERR(0, msgType, len);
-
 		}else msgERR(0, msgType, len);
+	}else if(type == AOKERR){
+		if((msg[7] & 0x80) == AOK){
+
+			//Pokud se jedna o odpoved na zpravu z PC do hl. jednotky
+			if(msg[8] == 0x30){
+				if(workerGetSongs.assert && workerGetSongs.status == WORKER_WAITING){
+					workerGetSongs.status = WORKER_OK;
+					strToSongMenu(&msg[11], &songMenuSize);
+				}
+
+				if(workerRecord.assert && workerRecord.status == WORKER_WAITING){
+					if(msg[11] == 1){
+						workerRecord.status = WORKER_ERR;
+					}else{
+						workerRecord.status = WORKER_OK;
+					}
+				}
+
+				}
+		}else if((msg[7] & 0x80) == ERR){
+			if(workerGetSongs.assert && workerGetSongs.status == WORKER_WAITING){
+				workerGetSongs.status = WORKER_ERR;
+			}
+		}
 	}else msgERR(0, msgType, len);
 }
 

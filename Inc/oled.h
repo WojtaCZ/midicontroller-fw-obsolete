@@ -31,6 +31,7 @@ void (*splashFunction)(void*);
 void * splashParams;
 
 #define APP_DISPLAY		0
+#define APP_RECORD		1
 
 struct reqNumber{
 	uint8_t application;
@@ -75,5 +76,9 @@ void oled_refreshresume();
 void oled_BtDevPairCompleteSplash(char * msg);
 void oled_NothingFound();
 void oled_ErrorSplash(char * msg);
+void oled_ValueEnterSplash(struct reqValue * num);
+void oled_NumberEnterSplash(struct reqNumber * num);
+void oled_DisplayStatusSplash();
+void oled_NameExistsSplash();
 
 #endif
