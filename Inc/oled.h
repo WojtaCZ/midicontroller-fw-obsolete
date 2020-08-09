@@ -80,5 +80,6 @@ void oled_ValueEnterSplash(struct reqValue * num);
 void oled_NumberEnterSplash(struct reqNumber * num);
 void oled_DisplayStatusSplash();
 void oled_NameExistsSplash();
+void oled_ShutdownSplash();
 
 #endif

@@ -37,14 +37,14 @@ void strToSongMenu(char * str, uint8_t * size){
 		}
 
 	//Vytvori tlacitko zpet
-	songMenu[items+1].font = &Font_11x18;
-	songMenu[items+1].name = "Zpet";
-	songMenu[items+1].selected = 0;
-	songMenu[items+1].hasSpecialSelector = 1;
-	songMenu[items+1].specharNotSelected = 36;
-	songMenu[items+1].specharSelected = 37;
-	songMenu[items+1].submenuLevel = 3;
-	songMenu[items+1].parentItem = 0;
+	songMenu[items].font = &Font_11x18;
+	songMenu[items].name = "Zpet";
+	songMenu[items].selected = 0;
+	songMenu[items].hasSpecialSelector = 1;
+	songMenu[items].specharNotSelected = 36;
+	songMenu[items].specharSelected = 37;
+	songMenu[items].submenuLevel = 3;
+	songMenu[items].parentItem = 0;
 
 }
 
@@ -104,15 +104,14 @@ void midiController_record(uint8_t initiator, char * songname){
 	}else if(initiator == ADDRESS_CONTROLLER){
 	//Spusteno ovladacem
 		//Jen se zobrazi obrazovka nahravani
-		oled_setDisplayedSplash(oled_recordingSplash, songname);
-	}else if(initiator == ADDRESS_MAIN){
-	//Spusteno ze zakladnove stanice
-		//Posle se zprava do PC aby zacalo nahravat
 		char msg[100];
 		msg[0] = INTERNAL_COM;
 		msg[1] = INTERNAL_COM_REC;
 		memcpy(&msg[2], songname, strlen(songname));
 		sendMsg(ADDRESS_CONTROLLER, ADDRESS_PC, 0, INTERNAL, msg, strlen(songname)+2);
+	}else if(initiator == ADDRESS_MAIN){
+	//Spusteno ze zakladnove stanice
+		//Posle se zprava do PC aby zacalo nahravat
 	}
 
 
@@ -120,23 +119,22 @@ void midiController_record(uint8_t initiator, char * songname){
 
 void midiController_play(uint8_t initiator, char * songname){
 	//Spusteno z PC
-	if(initiator == 0x00){
+	if(initiator == ADDRESS_PC){
 		memset(selectedSong, 0, 40);
 		sprintf(selectedSong, "%s", songname);
 		//Jen se zobrazi obrazovka prehravani
 		oled_setDisplayedSplash(oled_playingSplash, songname);
-	}else if(initiator == 0x01){
+	}else if(initiator == ADDRESS_CONTROLLER){
 	//Spusteno ovladacem
 		//Jen se zobrazi obrazovka prehravani
-		oled_setDisplayedSplash(oled_playingSplash, songname);
-	}else if(initiator == 0x02){
-	//Spusteno ze zakladnove stanice
-		//Posle se zprava do PC aby zacalo prehravat
 		char msg[100];
 		msg[0] = INTERNAL_COM;
 		msg[1] = INTERNAL_COM_PLAY;
 		memcpy(&msg[2], songname, strlen(songname));
 		sendMsg(ADDRESS_CONTROLLER, ADDRESS_PC, 0, INTERNAL, msg, strlen(songname)+2);
+	}else if(initiator == ADDRESS_MAIN){
+	//Spusteno ze zakladnove stanice
+		//Posle se zprava do PC aby zacalo prehravat
 	}
 
 
@@ -147,11 +145,10 @@ void midiController_stop(uint8_t initiator){
 	if(initiator == ADDRESS_CONTROLLER){
 		//Posle se zprava do PC o zastaveni
 		char msg[2] = {INTERNAL_COM, INTERNAL_COM_STOP};
-		sendMsg(ADDRESS_CONTROLLER, ADDRESS_MAIN, 0, INTERNAL, msg, 2);
+		sendMsg(ADDRESS_CONTROLLER, ADDRESS_PC, 0, INTERNAL, msg, 2);
 	}else{
 		//Vrati se do menu, zapne OLED refresh a vypne LED
 		oledType = OLED_MENU;
-		oled_refreshResume();
 	}
 
 }
@@ -228,7 +225,7 @@ uint32_t midiController_checkKeyboard(){
 }
 
 //Rutina pro kontrolu pripojeni PC a ovladace a odesilani info o "zijici" hlavni jednotce
-midiController_keepalive_process(){
+void midiController_keepalive_process(){
 	//Pricita citace - jak dlouho nedostal odpoved
 	alivePCCounter++;
 	aliveMainCounter++;

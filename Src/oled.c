@@ -98,6 +98,7 @@ void oled_menuOnclick(int menupos){
 				numRecordSong.charactersLen = 11;
 				numRecordSong.application = APP_RECORD;
 				oled_setDisplayedSplash(oled_ValueEnterSplash, &numRecordSong);
+			break;
 
 			case 2:
 				//Zobrazi menu varhan
@@ -262,8 +263,7 @@ void oled_menuOnclick(int menupos){
 		}else{
 			memset(selectedSong, 0, 40);
 			sprintf(selectedSong, "%s", songMenu[encoderpos].name);
-			//memcpy(&selectedSong[0], songMenu[encoderpos].name, strlen(songMenu[encoderpos].name));
-			midiController_play(ADDRESS_MAIN, selectedSong);
+			midiController_play(ADDRESS_CONTROLLER, selectedSong);
 		}
 	}else if(strcmp(dispmenuname, "btScanedDevices") == 0){
 		if(menupos == btScannedCount){
@@ -390,18 +390,19 @@ void oled_drawMenu(){
 
 
 	//Vypise se hlavicka
-	//sprintf(oledHeader, "%02X%02X%02X%02X%02X%02X%02X%02X%02X", buf[0], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], buf[8], buf[9]);
+	//sprintf(oledHeader, "%02X%02X%02X", I2C_buffer[7], I2C_buffer[8], I2C_buffer[9]);
 	//sprintf(oledHeader, "%d %d %d %d %d", alivePC, aliveMain, btCmdMode, btStreamOpen, workerMiscelaneous.assert);
-	sprintf(oledHeader, "%2d.%2d %2d:%02d",date.Date, date.Month, time.Hours, time.Minutes);
+	//sprintf(oledHeader, "%2d.%2d. %2d:%02d",date.Date, date.Month, time.Hours, time.Minutes);
 	//sprintf(oledHeader, "E: %d N: %s", encoderpos, dispmenu[encoderpos].name);
 	//sprintf(oledHeader, "Disp: %d", HAL_GPIO_ReadPin(DISP_SENSE_GPIO_Port, DISP_SENSE_Pin));
 	//oledHeader = "MIDIControll 0.1";
 	//sprintf(oledHeader, "%d %d %d", HAL_GPIO_ReadPin(MIDI_ACTIVE_GPIO_Port, MIDI_ACTIVE_Pin), HAL_GPIO_ReadPin(MIDI_SEARCHING_GPIO_Port, MIDI_SEARCHING_Pin), HAL_GPIO_ReadPin(MIDI_IO_SELECTED_GPIO_Port, MIDI_IO_SELECTED_Pin));
 	//sprintf(oledHeader, "E: %d", loadingStat);
+	//sprintf(oledHeader, "%d %X", battVoltage, I2C_buffer[8]);
 	ssd1306_SetCursor(2,0);
 	ssd1306_WriteString(oledHeader, Font_7x10, White);
 
-	if(battStatus < 4){
+	if(battStatus <= 4){
 		ssd1306_SetCursor(114,0);
 		ssd1306_WriteChar(32+(2*battStatus), Icon_7x10, White);
 		ssd1306_SetCursor(121,0);
@@ -588,6 +589,20 @@ void oled_ErrorSplash(char * msg){
 	encoderclick = 0;
 
 }
+
+
+//Funkce pro vypsani "Uvolnete tlacitko"
+void oled_ShutdownSplash(){
+	ssd1306_SetCursor((128-(strlen("Uvolnete"))*11)/2, 14);
+	ssd1306_WriteString("Uvolnete", Font_11x18, White);
+
+	ssd1306_SetCursor((128-(strlen("tlacitko"))*11)/2, 34);
+	ssd1306_WriteString("tlacitko", Font_11x18, White);
+
+	encoderclick = 0;
+
+}
+
 
 //Funkce pro vypsani chyby
 void oled_NameExistsSplash(){
@@ -920,6 +935,7 @@ void oled_playingSplash(char * songname){
 	ssd1306_WriteString(msg, Font_7x10, Black);
 
 	if(encoderclick){
+		oled_setDisplayedMenu("mainmenu", &mainmenu, sizeof(mainmenu), 0);
 		oledType = OLED_MENU;
 		encoderclick = 0;
 		midiController_stop(ADDRESS_CONTROLLER);
@@ -959,6 +975,7 @@ void oled_recordingSplash(char * songname){
 
 
 	if(encoderclick){
+		oled_setDisplayedMenu("mainmenu", &mainmenu, sizeof(mainmenu), 0);
 		oledType = OLED_MENU;
 		encoderclick = 0;
 		midiController_stop(ADDRESS_CONTROLLER);
@@ -1057,11 +1074,44 @@ void oled_ValueEnterSplash(struct reqValue * num){
 	if(keypadClicks.right && num->selectedDigit < (num->digits-1)){
 		num->selectedDigit++;
 		keypadClicks.right = 0;
-		keyboardVertPos = 0;
+		keyboardVertPos = strchr(num->characters, num->enteredValue[num->selectedDigit])-num->characters;
 	}else if(keypadClicks.left && num->selectedDigit > 0){
 		num->selectedDigit--;
 		keypadClicks.left = 0;
-		keyboardVertPos = 0;
+		keyboardVertPos = strchr(num->characters, num->enteredValue[num->selectedDigit])-num->characters;
+	}
+
+
+	else if(keypadClicks.zero){
+		keyboardVertPos = 1;
+		keypadClicks.zero = 0;
+	}else if(keypadClicks.one){
+		keyboardVertPos = 2;
+		keypadClicks.one = 0;
+	}else if(keypadClicks.two){
+		keyboardVertPos = 3;
+		keypadClicks.two = 0;
+	}else if(keypadClicks.three){
+		keyboardVertPos = 4;
+		keypadClicks.three = 0;
+	}else if(keypadClicks.four){
+		keyboardVertPos = 5;
+		keypadClicks.four = 0;
+	}else if(keypadClicks.five){
+		keyboardVertPos = 6;
+		keypadClicks.five = 0;
+	}else if(keypadClicks.six){
+		keyboardVertPos = 7;
+		keypadClicks.six = 0;
+	}else if(keypadClicks.seven){
+		keyboardVertPos = 8;
+		keypadClicks.seven = 0;
+	}else if(keypadClicks.eight){
+		keyboardVertPos = 9;
+		keypadClicks.eight = 0;
+	}else if(keypadClicks.nine){
+		keyboardVertPos = 10;
+		keypadClicks.nine = 0;
 	}
 
 	if(encoderclick){

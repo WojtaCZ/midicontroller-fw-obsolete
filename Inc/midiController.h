@@ -7,8 +7,8 @@
 uint32_t keyboardState, keyboardStateOld;
 
 uint32_t adcReadings[2];
-float battVoltage, usbVoltage;
-
+float usbVoltage;
+int battVoltage, battVoltageTemp, battVoltageTempCount;
 
 signed int keyboardSidePos, keyboardSidePosMax, keyboardVertPos, keyboardVertPosMax, keyboardVertPosOld;
 
@@ -52,7 +52,7 @@ int8_t btDataIcon;
 char selectedSong[40];
 
 //Flagy pro "workery"
-struct worker workerBtScanDev, workerBtConnect, workerBtBondDev, workerBtEnterPairingKey, workerBtRemoveController, workerGetSongs, workerMiscelaneous, workerDispRefresh, workerRecord;
+struct worker workerBtScanDev, workerBtConnect, workerBtBondDev, workerBtEnterPairingKey, workerBtRemoveController, workerGetSongs, workerMiscelaneous, workerDispRefresh, workerRecord, workerTurnOff;
 
 char * workerBtConnectMAC;
 
@@ -72,6 +72,7 @@ void midiController_keepalive_process();
 uint8_t midiController_setDisplay(uint16_t cislo_pisne, uint8_t cislo_sloky, uint8_t barva, uint8_t napev);
 uint8_t midiController_setDisplayRaw(uint8_t * data, uint16_t len);
 void midiController_get_time();
+void strToSongMenu(char * str, uint8_t * size);
 
 struct keyboard{
 	uint8_t one;

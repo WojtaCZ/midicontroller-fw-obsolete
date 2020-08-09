@@ -20,14 +20,20 @@ void decodeMessage(char * msg, uint8_t broadcast){
 	uint8_t src = ((msg[6] & 0x18) >> 3);
 	uint8_t type = ((msgType & 0xE0) >> 5);
 
-	if(type = INTERNAL){
+	if(type == INTERNAL){
 		if(msg[7] == INTERNAL_COM){
 			if(msg[8] == INTERNAL_COM_PLAY){
-				midiController_play(src, &msg[9]);
+				char * buffPlay = (char*) malloc(50);
+				memset(buffPlay, 0, 50);
+				memcpy(buffPlay, msg+9, len-3);
+				midiController_play(src, buffPlay);
 			}else if(msg[8] == INTERNAL_COM_STOP){
 				midiController_stop(src);
 			}else if(msg[8] == INTERNAL_COM_REC){
-				midiController_record(src, &msg[9]);
+				char * buffRec = (char*) malloc(50);
+				memset(buffRec, 0, 50);
+				memcpy(buffRec, msg+9, len-3);
+				midiController_record(src, buffRec);
 				msgAOK(0, msgType, len, 0, NULL);
 			}else if(msg[8] == INTERNAL_COM_KEEPALIVE){
 				if(src == ADDRESS_MAIN){
@@ -54,7 +60,7 @@ void decodeMessage(char * msg, uint8_t broadcast){
 				time.SecondFraction = 0;
 				time.SubSeconds = 0;
 				time.TimeFormat = RTC_HOURFORMAT_24;
-				time.StoreOperation = RTC_STOREOPERATION_SET;
+				time.StoreOperation = RTC_STOREOPERATION_RESET;
 
 				date.WeekDay = RTC_WEEKDAY_MONDAY;
 				date.Date = msg[12];
@@ -70,7 +76,7 @@ void decodeMessage(char * msg, uint8_t broadcast){
 		if((msg[7] & 0x80) == AOK){
 
 			//Pokud se jedna o odpoved na zpravu z PC do hl. jednotky
-			if(msg[8] == 0x30){
+			if(msg[8] == 0x28){
 				if(workerGetSongs.assert && workerGetSongs.status == WORKER_WAITING){
 					workerGetSongs.status = WORKER_OK;
 					strToSongMenu(&msg[11], &songMenuSize);

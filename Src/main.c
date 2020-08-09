@@ -68,6 +68,10 @@ uint8_t c, cycles = 0 ;
 char buffer[60];
 
 int x = 0;
+
+int turnOffCounter = 0, turnOffEnable = 0;
+#define TURN_OFF_DELAY 3
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -152,12 +156,30 @@ int main(void)
   midiController_get_time();
 
   oledType = OLED_MENU;
+  turnOffEnable = 1;
+  battVoltageTempCount = 0;
+  HAL_ADC_PollForConversion (&hadc1, 1000);
+  battVoltage = HAL_ADC_GetValue(&hadc1);
+
   /* USER CODE END 2 */
+
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+
+	  	  if(workerTurnOff.assert){
+	  		HAL_TIM_Base_Stop_IT(&htim1);
+	  		HAL_TIM_Base_Stop_IT(&htim2);
+	  		HAL_TIM_Base_Stop_IT(&htim3);
+	  		HAL_TIM_Base_Stop_IT(&htim6);
+	  		HAL_TIM_Base_Stop_IT(&htim7);
+	  		HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
+				while(1){
+					HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, GPIO_PIN_RESET);
+				}
+	  	  }
 
 		  //Pokud byl request na skenovani
 		  if(workerBtScanDev.assert){
@@ -218,7 +240,14 @@ int main(void)
 
 	 	if(workerMiscelaneous.assert){
 	 		HAL_ADC_PollForConversion (&hadc1, 1000);
-	 		battVoltage = (HAL_ADC_GetValue(&hadc1) * 0.000805664);
+	 		battVoltageTemp += HAL_ADC_GetValue(&hadc1);
+	 		battVoltageTempCount++;
+
+	 		if(battVoltageTempCount >= 10){
+	 			battVoltage = battVoltageTemp / battVoltageTempCount;
+	 			battVoltageTempCount = 0;
+	 			battVoltageTemp = 0;
+	 		}
 	 		//Odesle informaci o svoji pritonosti
 	 		char msg[] = {INTERNAL_COM, INTERNAL_COM_KEEPALIVE};
 	 		sendMsg(ADDRESS_CONTROLLER, ADDRESS_OTHER, 1, INTERNAL, msg, 2);
@@ -276,6 +305,26 @@ int main(void)
 
 	 		workerDesert(&workerDispRefresh);
 	 	}
+
+
+		if(workerRecord.assert){
+			if(workerRecord.status == WORKER_REQUEST){
+				char msg[50];
+				msg[0] = INTERNAL_COM;
+				msg[1] = INTERNAL_COM_CHECK_NAME;
+				sprintf(&msg[2], "%s", numRecordSong.enteredValue);
+				sendMsg(ADDRESS_CONTROLLER, ADDRESS_PC, 0, INTERNAL, msg, strlen(numRecordSong.enteredValue)+2);
+				workerRecord.status = WORKER_WAITING;
+			}else if(workerRecord.status == WORKER_OK){
+				midiController_record(ADDRESS_CONTROLLER, numRecordSong.enteredValue);
+				workerDesert(&workerRecord);
+			}else if(workerRecord.status == WORKER_ERR){
+				oled_setDisplayedSplash(oled_NameExistsSplash, "");
+				workerDesert(&workerRecord);
+			}
+
+		  }
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -467,7 +516,40 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
 			}
 		}else btStatusMsgWD = 0;
 
-		HAL_I2C_Mem_Read(&hi2c1, (0x6B<<1), 0x08, 1, &buf[8], 1, HAL_MAX_DELAY);
+
+		if(turnOffEnable){
+			if(keypad.power && turnOffCounter == 0){
+				oled_setDisplayedSplash(oled_LoadingSplash, "Vypinam");
+				turnOffCounter++;
+			}else if(keypad.power && turnOffCounter < TURN_OFF_DELAY*2){
+				turnOffCounter++;
+			}else if(!keypad.power && turnOffCounter > 0 && turnOffCounter < TURN_OFF_DELAY*2){
+				turnOffCounter = 0;
+				oledType = OLED_MENU;
+			}else if(turnOffCounter >= TURN_OFF_DELAY*2 && keypad.power){
+				oled_setDisplayedSplash(oled_ShutdownSplash, "");
+			}else if(turnOffCounter >= TURN_OFF_DELAY*2 && !keypad.power){
+				//HAL_NVIC_SystemReset();
+				workerAssert(&workerTurnOff);
+			}
+		}
+
+
+		HAL_I2C_Mem_Read(&hi2c1, (0x6B<<1), 0x08, 1, &I2C_buffer[8], 1, HAL_MAX_DELAY);
+
+		if((I2C_buffer[8] & 0x0C) == 0x01 || (I2C_buffer[8] & 0x0C) == 0x02){
+			battStatus = 5;
+		}else{
+			if(battVoltage > 2960){
+				battStatus = 4;
+			}else if(battVoltage < 2900 && battVoltage > 2620){
+				battStatus = 2;
+			}else if(battVoltage < 2560){
+				battStatus = 0;
+			}
+		}
+
+
 
 	}
 

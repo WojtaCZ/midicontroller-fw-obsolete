@@ -1,4 +1,4 @@
-msgDecoder.c:121:6:sendMsg	40	static
-msgDecoder.c:97:6:msgAOK	40	static
-msgDecoder.c:109:6:msgERR	32	static
-msgDecoder.c:11:6:decodeMessage	48	static
+msgDecoder.c:127:6:sendMsg	40	static
+msgDecoder.c:103:6:msgAOK	40	static
+msgDecoder.c:115:6:msgERR	32	static
+msgDecoder.c:11:6:decodeMessage	64	static
